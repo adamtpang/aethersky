@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app starts on deterministic mock traffic with a MOCK DATA banner, so it works with no network access to OpenSky and no credentials.
+Open http://localhost:3000. The app starts on live OpenSky traffic around the Denver area, with no credentials needed. If OpenSky cannot be reached or is rate limited, it falls back to deterministic mock traffic with a MOCK DATA banner, so it still works offline.
 
 Other commands:
 
@@ -25,7 +25,7 @@ Other commands:
 - `npm run build` makes a production build
 - `npm run lint` and `npm run typecheck` check the code
 
-Live traffic is opt-in. Pick "Live (OpenSky)" in the sidebar and the app asks its own `/api/aircraft` route for the current map view, clamped to a small box. Anonymous access works with low limits. To use your own OpenSky OAuth2 client, copy `.env.example` to `.env.local` and set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`. Never commit that file. Any live failure (rate limit, blocked host, network error) falls back to mock traffic and says so on screen.
+Live traffic is the default. The app asks its own `/api/aircraft` route for the current map view, clamped to a small box, every 15 seconds. Pick "Mock" in the sidebar for the scripted scenario. Anonymous access works with low limits (400 credits a day). To use your own OpenSky OAuth2 client, copy `.env.example` to `.env.local` and set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`. Never commit that file. Any live failure (rate limit, blocked host, network error) falls back to mock traffic and says so on screen.
 
 ## How the check works
 

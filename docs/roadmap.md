@@ -17,13 +17,15 @@ The repository is a placeholder plus this spec. The first implementation is the 
 
 Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 15, 2026. Check each one off or delete it when it is settled.
 
-- [ ] Review and merge the MVP pull request. Not merged yet, and nothing is deployed.
+- [x] Review and merge the MVP pull request. Merged on November 15, 2026 at Adam's request. Nothing is deployed yet.
 - [ ] First production deploy. Git-triggered Vercel builds are now skipped for this project (Ignored Build Step is `exit 0`), so deploy by hand with `vercel deploy --prod` from this folder once the pull request is merged. To let `main` build on its own instead, change the Ignored Build Step in Vercel under Settings, Git.
 - [ ] Confirm the first deploy builds as Next.js. The Framework Preset was changed from the static placeholder to Next.js after a preview build failed with "No Output Directory named public". That failed build published nothing.
 - [ ] Check whether OpenSky answers from Vercel. OpenSky may block cloud hosts, in which case live mode falls back to mock traffic on the deployed site.
 - [ ] Decide on the grid prefilter change. The engine searches two cells out instead of the eight touching cells in the tech spec, because a fast head-on pair can start two cells apart and would otherwise be dropped. Either accept it and update section 7 of the tech spec, or pick a different fix.
 - [ ] Delete `index.html`, the old placeholder page. It is unused. A workspace safety hook blocked removing it during the build.
-- [ ] Decide whether mock should stay the default data source. It is the default now to protect the 400 anonymous OpenSky credits a day and to respect the non-profit terms. Live is opt-in.
+- [x] Decide the default data source. Adam chose live on November 15, 2026. Mock is the fallback and a sidebar option.
+- [ ] Ask OpenSky about a license (contact@opensky-network.org). Their free terms cover non-profit research and education, and operational use in a live public service needs written permission. Live is now the default, so this matters before the site gets real traffic.
+- [ ] Watch the anonymous OpenSky quota (400 credits a day). With live as the default, a few visitors can use it up, after which everyone sees mock traffic until it refills.
 - [ ] Decide whether to check vertical separation across the whole lookahead window. Today it is checked only at the moment of closest horizontal approach, as the tech spec defines it, so a pair inside both thresholds at some other moment is not flagged.
 - [ ] Wire in PostHog with `tools/analytics/posthog-rollout.mjs` and add the site to `fleet.json`. This was outside the first brief.
 - [ ] Reduce label overlap when aircraft are close together at low zoom.
