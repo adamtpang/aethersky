@@ -84,8 +84,11 @@ export function mapReadsbAircraft(row: unknown, nowUnix: number | null): Aircraf
   };
 }
 
-/** Map a readsb response body. Throws on a body that is not the documented shape. */
-export function mapReadsbResponse(body: unknown): LiveStates {
+/**
+ * Pull the raw aircraft list and the feed time out of a readsb response.
+ * Throws on a body that is not the documented shape.
+ */
+export function readsbRows(body: unknown): { timeUnix: number | null; rows: unknown[] } {
   if (typeof body !== "object" || body === null) {
     throw new FeedError("the feed returned an unexpected body");
   }
@@ -97,8 +100,14 @@ export function mapReadsbResponse(body: unknown): LiveStates {
   // `now` is in milliseconds on these feeds.
   const nowMs = num(b.now);
   const timeUnix = nowMs === null ? null : Math.floor(nowMs > 1e11 ? nowMs / 1000 : nowMs);
+  return { timeUnix, rows: list };
+}
+
+/** Map a readsb response body. Throws on a body that is not the documented shape. */
+export function mapReadsbResponse(body: unknown): LiveStates {
+  const { timeUnix, rows } = readsbRows(body);
   const aircraft: Aircraft[] = [];
-  for (const row of list) {
+  for (const row of rows) {
     const mapped = mapReadsbAircraft(row, timeUnix);
     if (mapped) aircraft.push(mapped);
   }

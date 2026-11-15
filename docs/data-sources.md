@@ -25,7 +25,21 @@ Changed on November 15, 2026: the app shows real traffic or nothing. `GET /api/a
 | 2 | [adsb.lol](https://adsb.lol) | `https://api.adsb.lol/v2/point/{lat}/{lon}/{nm}` | 500 requests per day per IP | Open Database License (ODbL 1.0). A free key (`x-api-key`) raises the limit. [API docs](https://www.adsb.lol/docs/open-data/api/) |
 | 3 | [OpenSky](https://opensky-network.org) | `https://opensky-network.org/api/states/all` | 400 credits per day | Non-profit research and education. See below. |
 
-Notes:
+### National sweep (what the app uses)
+
+`GET /api/traffic` returns one snapshot of airborne traffic over the contiguous United States. Added November 15, 2026.
+
+- 30 circles of 250 NM from adsb.fi, in a honeycomb layout trimmed to a coarse outline of the country. Alaska and Hawaii are not covered.
+- One request at a time, at least 1.1 seconds apart, so a sweep is about 35 seconds and about 30 requests. With visitors on the site that is roughly one sweep a minute.
+- The CDN and the server both reuse a finished sweep for 60 seconds, and simultaneous callers share one sweep, so visitors do not each trigger their own.
+- Circles overlap. The freshest sighting of each aircraft is kept.
+- Every position is projected forward along its reported track, at its reported speed and climb, to the time the sweep finished, for at most 90 seconds (a teaching default). So positions on the map are estimates, up to a minute or two behind the real aircraft.
+- Aircraft on the ground are left out.
+- If three regions in a row fail, the sweep stops. If fewer than 60 percent of regions answer, the route returns 503 and the map shows nothing. If a few regions fail, the snapshot carries a warning that part of the map is missing traffic.
+- This is a heavier use of adsb.fi than one map view. It stays inside the published limit of 1 request per second, but the terms say personal, non-commercial use. Ask adsb.fi before pointing a large audience at it.
+- Only adsb.fi is used for the sweep. adsb.lol allows 500 requests a day without a key, which is about 16 sweeps.
+
+Notes for the single-box route `/api/aircraft`:
 
 - Both community feeds use the readsb JSON format and already report feet, knots, and feet per minute.
 - The route caches each box for 10 seconds, waits at least 1.1 seconds between adsb.fi requests, and leaves a feed alone for 20 seconds after a failure (or for the time a 429 asks for).

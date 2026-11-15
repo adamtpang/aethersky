@@ -18,10 +18,15 @@ The repository is a placeholder plus this spec. The first implementation is the 
 Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 15, 2026. Check each one off or delete it when it is settled.
 
 - [x] Review and merge the MVP pull request. Merged on November 15, 2026 at Adam's request. Nothing is deployed yet.
-- [ ] First production deploy. Git-triggered Vercel builds are now skipped for this project (Ignored Build Step is `exit 0`), so deploy by hand with `vercel deploy --prod` from this folder once the pull request is merged. To let `main` build on its own instead, change the Ignored Build Step in Vercel under Settings, Git.
+- [x] First production deploy (done November 15, 2026, by hand).
+- [ ] Deploys stay manual. Git-triggered Vercel builds are now skipped for this project (Ignored Build Step is `exit 0`), so deploy by hand with `vercel deploy --prod` from this folder once the pull request is merged. To let `main` build on its own instead, change the Ignored Build Step in Vercel under Settings, Git.
 - [ ] Confirm the first deploy builds as Next.js. The Framework Preset was changed from the static placeholder to Next.js after a preview build failed with "No Output Directory named public". That failed build published nothing.
 - [x] Check whether OpenSky answers from Vercel. It does not (timed out on November 15, 2026), so it is now the third choice.
-- [ ] Check that adsb.fi and adsb.lol answer from Vercel after the next deploy. They answered from a home connection. If neither answers from Vercel, the deployed site will show LIVE DATA UNAVAILABLE.
+- [x] Check that adsb.fi answers from Vercel. It does (November 15, 2026).
+- [ ] Check that the national sweep finishes on Vercel. It needs a function that can run for about 40 seconds. It was only run on a home machine.
+- [ ] Flagged pairs are dominated by slow traffic near airports (588 pairs nationally in one test). Decide on a floor, for example ignoring pairs below a chosen altitude, and label it as a demo setting.
+- [ ] The map does not move between refreshes. Consider gently advancing positions each few seconds, clearly labeled as projected.
+- [ ] Alaska and Hawaii are not covered.
 - [ ] Get a free adsb.lol key and set `ADSBLOL_API_KEY` in Vercel, so the backup feed has more than 500 requests a day.
 - [ ] Check with adsb.fi that this use is fine. Its open data terms say personal, non-commercial use.
 - [ ] Decide on the grid prefilter change. The engine searches two cells out instead of the eight touching cells in the tech spec, because a fast head-on pair can start two cells apart and would otherwise be dropped. Either accept it and update section 7 of the tech spec, or pick a different fix.
