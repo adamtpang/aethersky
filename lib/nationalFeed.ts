@@ -1,15 +1,14 @@
 import { FeedError, REQUEST_TIMEOUT_MS, finiteOrNull as num } from "./feedError";
-import { projectAhead } from "./geo";
 import { ADSB_FI, mapReadsbAircraft, readsbRows } from "./readsb";
-import type { Aircraft } from "./types";
-import { encodeAircraft, type NationalSnapshot } from "./wire";
+import { encodeSighting, type SweepEvent, type WireRow } from "./wire";
 
 /**
  * Whole-country live traffic. No feed answers a single request for the
  * contiguous United States, so the server sweeps it: 30 overlapping circles
  * of 250 NM from adsb.fi, one request per circle, spaced to respect the
  * feed's limit of 1 request per second. One sweep takes about 35 seconds
- * and is shared by every visitor.
+ * and is shared by every visitor. Each region is published as soon as it
+ * arrives, so a page can draw it without waiting for the rest.
  *
  * Real traffic only. If the sweep fails there is no substitute data.
  */
@@ -30,25 +29,30 @@ export const NATIONAL_TILES: ReadonlyArray<readonly [number, number]> = [
   [26.5, -99.94], [26.5, -92.82], [26.5, -85.71], [26.5, -78.6],
 ];
 
+/**
+ * The order regions are fetched in: the busiest airspace first, so the
+ * first aircraft a visitor sees are where most of the traffic is.
+ */
+const SWEEP_ORDER: ReadonlyArray<number> = [
+  19, 12, 18, 25, 11, 17, 24, 13, 20, 10, 16, 23, 29, 28, 4, 9, 15, 22, 27, 14,
+  21, 6, 7, 8, 3, 26, 1, 2, 0, 5,
+];
+
 /** adsb.fi allows 1 request per second. Stay a little under it. */
 const REQUEST_SPACING_MS = 1_100;
 /** A finished sweep is reused for this long before another one starts. */
-const SNAPSHOT_TTL_MS = 60_000;
+const SWEEP_TTL_MS = 60_000;
+/** A failed sweep is retried sooner than a good one is refreshed. */
+const FAILED_TTL_MS = 15_000;
 /** Give up on a sweep that runs longer than this. */
 const SWEEP_BUDGET_MS = 75_000;
 /** Below this share of regions the picture is too patchy to show. */
 const MIN_REGION_SHARE = 0.6;
-/**
- * ASSUMPTION: positions are projected forward to the end of the sweep at
- * constant velocity, for at most this many seconds. Teaching default.
- */
-export const MAX_PROJECTION_SEC = 90;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface Sighting {
-  aircraft: Aircraft;
-  /** When this position was true, unix seconds. */
+  row: WireRow;
   positionUnix: number;
 }
 
@@ -76,139 +80,175 @@ async function fetchTile(lat: number, lon: number): Promise<Sighting[]> {
   const { timeUnix, rows } = readsbRows(body);
   const feedNow = timeUnix ?? Math.floor(Date.now() / 1000);
   const sightings: Sighting[] = [];
-  for (const row of rows) {
-    const aircraft = mapReadsbAircraft(row, feedNow);
+  for (const raw of rows) {
+    const aircraft = mapReadsbAircraft(raw, feedNow);
     // The national view shows airborne traffic only.
     if (!aircraft || aircraft.onGround) continue;
-    const age = num((row as Record<string, unknown>).seen_pos) ?? 0;
-    sightings.push({ aircraft, positionUnix: feedNow - age });
+    const age = num((raw as Record<string, unknown>).seen_pos) ?? 0;
+    const positionUnix = feedNow - age;
+    sightings.push({ row: encodeSighting(aircraft, positionUnix), positionUnix });
   }
   return sightings;
 }
 
-/** Move a sighting forward to `atUnix` at its reported speed, track, and climb. */
-export function projectSighting(sighting: Sighting, atUnix: number): Aircraft {
-  const { aircraft } = sighting;
-  const dt = Math.min(MAX_PROJECTION_SEC, Math.max(0, atUnix - sighting.positionUnix));
-  if (dt === 0) return aircraft;
-  const ahead = projectAhead(aircraft, dt);
-  if (!ahead) return aircraft;
-  return {
-    ...aircraft,
-    latitude: ahead[0],
-    longitude: ahead[1],
-    altitudeFt:
-      aircraft.altitudeFt !== null && aircraft.verticalRateFpm !== null
-        ? aircraft.altitudeFt + (aircraft.verticalRateFpm * dt) / 60
-        : aircraft.altitudeFt,
-  };
-}
+/**
+ * One sweep in progress or finished. Events are kept so that a caller who
+ * arrives late gets everything published so far, then follows along.
+ */
+export class Sweep {
+  readonly events: SweepEvent[] = [];
+  readonly startedAtMs = Date.now();
+  finishedAtMs: number | null = null;
+  failed = false;
+  private listeners = new Set<(event: SweepEvent) => void>();
+  readonly done: Promise<void>;
 
-export type NationalResult =
-  | { ok: true; snapshot: NationalSnapshot }
-  | { ok: false; error: string };
+  constructor() {
+    this.done = this.run().catch(() => {
+      this.publish({
+        t: "end",
+        finishedAtUnix: Math.floor(Date.now() / 1000),
+        sweepSec: Math.round((Date.now() - this.startedAtMs) / 1000),
+        regionsOk: 0,
+        regionsTotal: NATIONAL_TILES.length,
+        error: "The national sweep failed.",
+      });
+    });
+  }
 
-async function sweep(): Promise<NationalResult> {
-  const startedMs = Date.now();
-  // Circles overlap, so keep the freshest sighting of each aircraft.
-  const freshest = new Map<string, Sighting>();
-  let regionsOk = 0;
-  let consecutiveFailures = 0;
-  let lastReason = "";
+  /** Replays everything so far, then calls back for each new event. */
+  subscribe(listener: (event: SweepEvent) => void): () => void {
+    for (const event of this.events) listener(event);
+    if (this.finishedAtMs !== null) return () => {};
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
-  for (let i = 0; i < NATIONAL_TILES.length; i++) {
-    if (Date.now() - startedMs > SWEEP_BUDGET_MS) {
-      lastReason = "the sweep ran out of time";
-      break;
+  private publish(event: SweepEvent) {
+    this.events.push(event);
+    if (event.t === "end") {
+      this.finishedAtMs = Date.now();
+      this.failed = event.error !== undefined;
     }
-    const requestStartedMs = Date.now();
-    const [lat, lon] = NATIONAL_TILES[i];
-    try {
-      for (const sighting of await fetchTile(lat, lon)) {
-        const known = freshest.get(sighting.aircraft.icao24);
-        if (!known || sighting.positionUnix > known.positionUnix) {
-          freshest.set(sighting.aircraft.icao24, sighting);
+    for (const listener of this.listeners) listener(event);
+    if (event.t === "end") this.listeners.clear();
+  }
+
+  private async run() {
+    const regionsTotal = NATIONAL_TILES.length;
+    this.publish({
+      t: "start",
+      source: "adsb.fi",
+      startedAtUnix: Math.floor(this.startedAtMs / 1000),
+      regionsTotal,
+    });
+
+    // Circles overlap, so only publish a sighting fresher than the last one sent.
+    const sent = new Map<string, number>();
+    let regionsOk = 0;
+    let done = 0;
+    let consecutiveFailures = 0;
+    let lastReason = "";
+
+    for (let step = 0; step < SWEEP_ORDER.length; step++) {
+      if (Date.now() - this.startedAtMs > SWEEP_BUDGET_MS) {
+        lastReason = "the sweep ran out of time";
+        break;
+      }
+      const requestStartedMs = Date.now();
+      const [lat, lon] = NATIONAL_TILES[SWEEP_ORDER[step]];
+      try {
+        const rows: WireRow[] = [];
+        for (const sighting of await fetchTile(lat, lon)) {
+          const id = sighting.row[0];
+          const known = sent.get(id);
+          if (known === undefined || sighting.positionUnix > known + 0.5) {
+            sent.set(id, sighting.positionUnix);
+            rows.push(sighting.row);
+          }
+        }
+        regionsOk++;
+        consecutiveFailures = 0;
+        this.publish({ t: "region", done: ++done, ok: true, rows });
+      } catch (error) {
+        consecutiveFailures++;
+        lastReason =
+          error instanceof FeedError
+            ? error.message
+            : error instanceof Error && error.name === "TimeoutError"
+              ? "did not respond in time"
+              : "could not be reached";
+        const status = error instanceof FeedError ? error.status : undefined;
+        console.warn(
+          `[national] region ${step + 1} of ${regionsTotal} failed${status ? ` (status ${status})` : ""}: ${lastReason}`,
+        );
+        this.publish({ t: "region", done: ++done, ok: false, rows: [] });
+        // Three failures in a row means the feed is down or blocking us. Stop.
+        if (consecutiveFailures >= 3) break;
+        if (error instanceof FeedError && error.status === 429) {
+          await sleep(Math.min(5_000, (error.retryAfterSec ?? 2) * 1000));
         }
       }
-      regionsOk++;
-      consecutiveFailures = 0;
-    } catch (error) {
-      consecutiveFailures++;
-      lastReason =
-        error instanceof FeedError
-          ? error.message
-          : error instanceof Error && error.name === "TimeoutError"
-            ? "did not respond in time"
-            : "could not be reached";
-      const status = error instanceof FeedError ? error.status : undefined;
-      console.warn(
-        `[national] region ${i + 1} of ${NATIONAL_TILES.length} failed${status ? ` (status ${status})` : ""}: ${lastReason}`,
-      );
-      // Three failures in a row means the feed is down or blocking us. Stop.
-      if (consecutiveFailures >= 3) break;
-      if (error instanceof FeedError && error.status === 429) {
-        await sleep(Math.min(5_000, (error.retryAfterSec ?? 2) * 1000));
+      const elapsed = Date.now() - requestStartedMs;
+      if (step < SWEEP_ORDER.length - 1 && elapsed < REQUEST_SPACING_MS) {
+        await sleep(REQUEST_SPACING_MS - elapsed);
       }
     }
-    const elapsed = Date.now() - requestStartedMs;
-    if (i < NATIONAL_TILES.length - 1 && elapsed < REQUEST_SPACING_MS) {
-      await sleep(REQUEST_SPACING_MS - elapsed);
-    }
-  }
 
-  const regionsTotal = NATIONAL_TILES.length;
-  if (regionsOk < regionsTotal * MIN_REGION_SHARE) {
-    return {
-      ok: false,
-      error: `The live feed answered for only ${regionsOk} of ${regionsTotal} regions (adsb.fi ${lastReason || "failed"}).`,
-    };
-  }
-
-  const generatedAtUnix = Math.floor(Date.now() / 1000);
-  const rows = [...freshest.values()].map((sighting) =>
-    encodeAircraft(projectSighting(sighting, generatedAtUnix)),
-  );
-  return {
-    ok: true,
-    snapshot: {
-      source: "adsb.fi",
-      generatedAtUnix,
-      sweepSec: Math.round((Date.now() - startedMs) / 1000),
+    const tooFew = regionsOk < regionsTotal * MIN_REGION_SHARE;
+    this.publish({
+      t: "end",
+      finishedAtUnix: Math.floor(Date.now() / 1000),
+      sweepSec: Math.round((Date.now() - this.startedAtMs) / 1000),
       regionsOk,
       regionsTotal,
-      rows,
-      ...(regionsOk < regionsTotal
+      ...(tooFew
         ? {
-            warning: `${regionsTotal - regionsOk} of ${regionsTotal} regions did not answer, so part of the map is missing traffic.`,
+            error: `The live feed answered for only ${regionsOk} of ${regionsTotal} regions (adsb.fi ${lastReason || "failed"}).`,
           }
-        : {}),
-    },
-  };
+        : regionsOk < regionsTotal
+          ? {
+              warning: `${regionsTotal - regionsOk} of ${regionsTotal} regions did not answer, so part of the map is missing traffic.`,
+            }
+          : {}),
+    });
+  }
 }
 
 // In-memory state for this server instance. No database.
-let cached: { expiresAtMs: number; result: NationalResult } | null = null;
-let inFlight: Promise<NationalResult> | null = null;
+let current: Sweep | null = null;
 
 /**
- * The latest national snapshot. A finished sweep is reused for 60 seconds,
- * and callers that arrive during a sweep share it instead of starting
- * another. Never throws.
+ * The sweep to read from: the one in progress, or a recent finished one, or
+ * a new one. Callers that arrive during a sweep share it.
  */
-export async function getNationalSnapshot(): Promise<NationalResult> {
-  if (cached && Date.now() < cached.expiresAtMs) return cached.result;
-  if (!inFlight) {
-    inFlight = sweep()
-      .catch((): NationalResult => ({ ok: false, error: "The national sweep failed." }))
-      .then((result) => {
-        // A failed sweep is retried sooner than a good one is refreshed.
-        cached = {
-          expiresAtMs: Date.now() + (result.ok ? SNAPSHOT_TTL_MS : 15_000),
-          result,
-        };
-        inFlight = null;
-        return result;
-      });
+export function getNationalSweep(): Sweep {
+  if (current) {
+    if (current.finishedAtMs === null) return current;
+    const ttl = current.failed ? FAILED_TTL_MS : SWEEP_TTL_MS;
+    if (Date.now() - current.finishedAtMs < ttl) return current;
   }
-  return inFlight;
+  current = new Sweep();
+  return current;
+}
+
+/** The sweep as a stream of JSON lines, one event per line. */
+export function nationalStream(sweep: Sweep = getNationalSweep()): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let unsubscribe = () => {};
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      unsubscribe = sweep.subscribe((event) => {
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+          if (event.t === "end") controller.close();
+        } catch {
+          // The reader went away. Nothing to do.
+        }
+      });
+    },
+    cancel() {
+      unsubscribe();
+    },
+  });
 }

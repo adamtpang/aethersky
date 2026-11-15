@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEMO_DEFAULT_THRESHOLDS, type Aircraft } from "../types";
 import { detectConflicts, pairKey } from "./detect";
 import { fromEnu } from "./enu";
-import { REGION_SIZE_DEG, detectConflictsRegional, reachNm } from "./regional";
+import { FAST_AIRCRAFT_KT, detectConflictsRegional, reachNm } from "./regional";
 import { buildSceneAircraft } from "./scene.fixture";
 
 const T = DEMO_DEFAULT_THRESHOLDS;
@@ -38,9 +38,16 @@ describe("country-wide conflict check", () => {
   });
 
   it("finds a pair that straddles a region boundary, exactly once", () => {
-    // Region edges fall on multiples of REGION_SIZE_DEG. These two sit 2.4 NM
-    // apart on either side of the 40 degree line, flying the same way.
-    expect(40 % REGION_SIZE_DEG).toBe(0);
+    // Sweep a close pair across a band of latitudes, so that whatever the
+    // cell size is, some copy of the pair straddles a cell edge.
+    for (let k = 0; k < 40; k++) {
+      const base = 39 + k * 0.05;
+      const swept = detectConflictsRegional(
+        [...COASTS, ac("n", base + 0.02, -100 - k * 0.07), ac("s", base - 0.02, -100 - k * 0.07)],
+        T,
+      );
+      expect(keys(swept)).toEqual(["n|s"]);
+    }
     const result = detectConflictsRegional(
       [...COASTS, ac("n", 40.02, -100), ac("s", 39.98, -100)],
       T,
@@ -83,7 +90,7 @@ describe("country-wide conflict check", () => {
       ac("w", west.latitude, west.longitude, { groundSpeedKt: 500, headingDeg: 90 }),
       ac("e", east.latitude, east.longitude, { groundSpeedKt: 500, headingDeg: 270 }),
     ];
-    expect(reachNm(wide, field)).toBeGreaterThan(80);
+    expect(reachNm(wide, 500)).toBeGreaterThan(80);
     const result = detectConflictsRegional(field, wide);
     expect(keys(result)).toEqual(["e|w"]);
     expect(result[0].tcpaSec).toBeGreaterThan(280);
@@ -118,5 +125,60 @@ describe("country-wide conflict check", () => {
     const b = new Set(keys(regional));
     const differing = [...a].filter((k) => !b.has(k)).length + [...b].filter((k) => !a.has(k)).length;
     expect(differing).toBeLessThanOrEqual(Math.ceil(local.length * 0.03));
+  });
+
+  it("does not lose a pair when one aircraft is implausibly fast", () => {
+    // 2000 kt and 60 NM apart head-on with a slow aircraft: closest approach
+    // in about 98 s. Handled outside the grid, so it must still be found.
+    const origin = { latitude: 36, longitude: -90 };
+    const half = 30 * 1852;
+    const west = fromEnu(-half, 0, origin);
+    const east = fromEnu(half, 0, origin);
+    expect(2000).toBeGreaterThan(FAST_AIRCRAFT_KT);
+    const field = [
+      ...COASTS,
+      ac("rocket", west.latitude, west.longitude, { groundSpeedKt: 2000, headingDeg: 90 }),
+      ac("slow", east.latitude, east.longitude, { groundSpeedKt: 200, headingDeg: 270 }),
+    ];
+    const result = detectConflictsRegional(field, T);
+    expect(keys(result)).toEqual(["rocket|slow"]);
+    expect(result[0].tcpaSec).toBeGreaterThan(95);
+    expect(result[0].tcpaSec).toBeLessThan(101);
+  });
+
+  it("checks six thousand aircraft quickly", () => {
+    let seed = 7;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    // Half spread over the country, half packed around ten busy airports.
+    const hubs = Array.from({ length: 10 }, () => [28 + rand() * 18, -120 + rand() * 45]);
+    const field: Aircraft[] = [];
+    for (let i = 0; i < 6000; i++) {
+      const hub = hubs[i % 10];
+      const packed = i % 2 === 0;
+      field.push(
+        ac(
+          `p${String(i).padStart(4, "0")}`,
+          packed ? hub[0] + (rand() - 0.5) * 1.5 : 25 + rand() * 24,
+          packed ? hub[1] + (rand() - 0.5) * 1.5 : -124 + rand() * 57,
+          {
+            altitudeFt: 1000 + Math.floor(rand() * 39) * 1000,
+            headingDeg: rand() * 360,
+            groundSpeedKt: 90 + rand() * 430,
+            verticalRateFpm: Math.round((rand() - 0.5) * 4000),
+          },
+        ),
+      );
+    }
+    detectConflictsRegional(field, T);
+    const startedAt = performance.now();
+    const result = detectConflictsRegional(field, T);
+    const ms = performance.now() - startedAt;
+    expect(result.length).toBeGreaterThan(0);
+    // Generous ceiling so slow machines pass. It runs in a few milliseconds.
+    expect(ms).toBeLessThan(250);
+    console.info(`regional check: 6000 aircraft, ${result.length} pairs, ${ms.toFixed(1)} ms`);
   });
 });

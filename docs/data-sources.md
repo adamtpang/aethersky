@@ -33,9 +33,10 @@ Changed on November 15, 2026: the app shows real traffic or nothing. `GET /api/a
 - One request at a time, at least 1.1 seconds apart, so a sweep is about 35 seconds and about 30 requests. With visitors on the site that is roughly one sweep a minute.
 - The CDN and the server both reuse a finished sweep for 60 seconds, and simultaneous callers share one sweep, so visitors do not each trigger their own.
 - Circles overlap. The freshest sighting of each aircraft is kept.
-- Every position is projected forward along its reported track, at its reported speed and climb, to the time the sweep finished, for at most 90 seconds (a teaching default). So positions on the map are estimates, up to a minute or two behind the real aircraft.
+- The route is a stream of JSON lines: one `start`, one `region` per region as it arrives (busiest airspace first), and one `end`. A page can draw the first region about a second after asking.
+- Positions are sent as reported, each with the time it was true. The page moves every aircraft forward along its reported track, at its reported speed and climb, to the current moment, and repeats that every 5 seconds. So positions on the map are estimates. A report older than 120 seconds is dropped instead of projected (a teaching default).
 - Aircraft on the ground are left out.
-- If three regions in a row fail, the sweep stops. If fewer than 60 percent of regions answer, the route returns 503 and the map shows nothing. If a few regions fail, the snapshot carries a warning that part of the map is missing traffic.
+- If three regions in a row fail, the sweep stops. If fewer than 60 percent of regions answer, the stream ends with an error and the page removes every aircraft. If a few regions fail, the snapshot carries a warning that part of the map is missing traffic.
 - This is a heavier use of adsb.fi than one map view. It stays inside the published limit of 1 request per second, but the terms say personal, non-commercial use. Ask adsb.fi before pointing a large audience at it.
 - Only adsb.fi is used for the sweep. adsb.lol allows 500 requests a day without a key, which is about 16 sweeps.
 

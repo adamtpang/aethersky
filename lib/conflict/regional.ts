@@ -1,124 +1,181 @@
 import type { Aircraft, ConflictPair, ConflictThresholds } from "../types";
-import { degToRad, mpsToKt } from "../units";
+import { degToRad, ktToMps } from "../units";
 import { evaluatePair, type Track } from "./cpa";
-import { detectConflicts, isEligible, sortConflicts, toTrack } from "./detect";
-import { FALLBACK_MAX_GROUND_SPEED_MPS, candidatePairs } from "./grid";
+import { isEligible, sortConflicts } from "./detect";
+import { EARTH_RADIUS_M } from "./enu";
 
 /**
- * Conflict check for traffic spread over a large area.
+ * Conflict check for traffic spread over a large area, built for speed.
  *
- * The engine projects onto one flat plane, which is only fair near its
- * origin. Over a whole country that plane would be badly stretched. So the
- * traffic is cut into regions a few degrees across, with a margin wide
- * enough that no flagged pair can fall between two regions. A region only
- * proposes candidate pairs. Each candidate is then measured on its own small
- * plane centered between the two aircraft, and is counted once.
+ * The engine works on a flat plane, which is only fair near its origin.
+ * Over a whole country one plane would be badly stretched. So:
+ *
+ * 1. Aircraft are sorted into a grid of cells in latitude and longitude,
+ *    sized so that any pair the exact test could flag sits in the same cell
+ *    or in touching cells. Each pair is looked at once.
+ * 2. Two cheap tests throw out almost every pair: they are too far apart
+ *    vertically to close in time, or too far apart on the ground.
+ * 3. The few pairs left are measured exactly, each on its own small plane
+ *    centered between the two aircraft.
+ *
+ * The cheap tests only ever discard pairs the exact test would also
+ * discard, so nothing the engine would flag is lost.
  */
 
-/** Region size in degrees. Small enough that the flat plane stays honest. */
-export const REGION_SIZE_DEG = 2;
+/**
+ * ASSUMPTION: aircraft faster than this are rare (or bad data). They are
+ * compared against everything directly, so one of them cannot blow up the
+ * cell size for the whole map. No pair is skipped because of this.
+ */
+export const FAST_AIRCRAFT_KT = 700;
 
-/** Farthest apart a flagged pair can start, in nautical miles. */
-export function reachNm(
-  thresholds: ConflictThresholds,
-  aircraft: ReadonlyArray<Aircraft>,
-): number {
-  let maxKt = 0;
-  for (const ac of aircraft) {
-    if (ac.groundSpeedKt !== null && ac.groundSpeedKt > maxKt) maxKt = ac.groundSpeedKt;
-  }
-  if (maxKt === 0) maxKt = mpsToKt(FALLBACK_MAX_GROUND_SPEED_MPS);
-  return thresholds.lateralNm + (2 * maxKt * thresholds.lookaheadSec) / 3600;
+/** Nautical miles per degree of latitude, as used for the search grid. */
+const NM_PER_DEG = 60;
+
+/** Farthest apart a flagged pair of ordinary aircraft can start, in nautical miles. */
+export function reachNm(thresholds: ConflictThresholds, maxSpeedKt: number): number {
+  return thresholds.lateralNm + (2 * maxSpeedKt * thresholds.lookaheadSec) / 3600;
 }
 
 export function detectConflictsRegional(
   aircraft: ReadonlyArray<Aircraft>,
   thresholds: ConflictThresholds,
 ): ConflictPair[] {
-  const eligible = aircraft.filter(isEligible);
-  if (eligible.length < 2) return [];
+  const list = aircraft.filter(isEligible);
+  const n = list.length;
+  if (n < 2) return [];
 
-  let minLat = Infinity;
-  let maxLat = -Infinity;
-  let minLon = Infinity;
-  let maxLon = -Infinity;
-  for (const ac of eligible) {
-    if (ac.latitude < minLat) minLat = ac.latitude;
-    if (ac.latitude > maxLat) maxLat = ac.latitude;
-    if (ac.longitude < minLon) minLon = ac.longitude;
-    if (ac.longitude > maxLon) maxLon = ac.longitude;
-  }
-  // Small enough to sit on one plane: use the engine directly.
-  if (maxLat - minLat <= REGION_SIZE_DEG && maxLon - minLon <= REGION_SIZE_DEG) {
-    return detectConflicts(eligible, thresholds);
-  }
-
-  const reach = reachNm(thresholds, eligible);
-  // One degree of latitude is taken as 60 NM. 10 percent is added for safety.
-  const marginLat = (reach * 1.1) / 60;
-
-  const cellOf = (value: number) => Math.floor(value / REGION_SIZE_DEG);
-  const buckets = new Map<string, Aircraft[]>();
-  const add = (key: string, ac: Aircraft) => {
-    const bucket = buckets.get(key);
-    if (bucket) bucket.push(ac);
-    else buckets.set(key, [ac]);
-  };
-
-  // Each aircraft joins every region whose margin it falls inside.
-  for (const ac of eligible) {
-    const cosLat = Math.max(0.2, Math.cos(degToRad(ac.latitude)));
-    const marginLon = marginLat / cosLat;
-    const y0 = cellOf(ac.latitude - marginLat);
-    const y1 = cellOf(ac.latitude + marginLat);
-    const x0 = cellOf(ac.longitude - marginLon);
-    const x1 = cellOf(ac.longitude + marginLon);
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) add(`${x},${y}`, ac);
-    }
+  // Flat arrays: the inner loop touches numbers, not objects.
+  const lat = new Float64Array(n);
+  const lon = new Float64Array(n);
+  const alt = new Float64Array(n);
+  const absRate = new Float64Array(n);
+  const speedKt = new Float64Array(n);
+  let maxLat = 0;
+  let maxOrdinaryKt = 0;
+  const fast: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const ac = list[i];
+    lat[i] = ac.latitude;
+    lon[i] = ac.longitude;
+    alt[i] = ac.altitudeFt as number;
+    absRate[i] = Math.abs(ac.verticalRateFpm ?? 0);
+    speedKt[i] = ac.groundSpeedKt as number;
+    if (Math.abs(ac.latitude) > maxLat) maxLat = Math.abs(ac.latitude);
+    if (speedKt[i] > FAST_AIRCRAFT_KT) fast.push(i);
+    else if (speedKt[i] > maxOrdinaryKt) maxOrdinaryKt = speedKt[i];
   }
 
-  const byId = new Map(eligible.map((ac) => [ac.icao24, ac]));
-  // Regions only propose candidates, on a slightly loosened plane so that
-  // the stretch near a region's edge cannot hide a pair.
-  const loose: ConflictThresholds = {
-    lateralNm: thresholds.lateralNm * 1.05 + 0.5,
-    verticalFt: thresholds.verticalFt,
-    lookaheadSec: thresholds.lookaheadSec * 1.05,
-  };
-  const seen = new Set<string>();
+  const { lateralNm, verticalFt, lookaheadSec } = thresholds;
+  const lookaheadMin = lookaheadSec / 60;
+  const lookaheadHr = lookaheadSec / 3600;
   const found: ConflictPair[] = [];
-  for (const [key, members] of buckets) {
-    if (members.length < 2) continue;
-    const [x, y] = key.split(",").map(Number);
-    const origin = {
-      latitude: (y + 0.5) * REGION_SIZE_DEG,
-      longitude: (x + 0.5) * REGION_SIZE_DEG,
-    };
-    const tracks: Track[] = [];
-    for (const member of members) {
-      const track = toTrack(member, origin);
-      if (track) tracks.push(track);
-    }
-    for (const [ta, tb] of candidatePairs(tracks, loose)) {
-      const id = `${ta.id}|${tb.id}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const a = byId.get(ta.id);
-      const b = byId.get(tb.id);
-      if (!a || !b) continue;
-      // Each candidate is then measured on its own plane, centered between
-      // the two aircraft, where the flat-earth error is smallest.
-      const middle = {
-        latitude: (a.latitude + b.latitude) / 2,
-        longitude: (a.longitude + b.longitude) / 2,
-      };
-      const trackA = toTrack(a, middle);
-      const trackB = toTrack(b, middle);
-      if (!trackA || !trackB) continue;
-      const hit = evaluatePair(trackA, trackB, thresholds);
-      if (hit) found.push(hit);
+
+  /** Look at one pair: two cheap rejections, then the exact test. */
+  const consider = (i: number, j: number) => {
+    // Vertical: even closing at their combined rates, do they get within range?
+    const gap = Math.abs(alt[i] - alt[j]);
+    if (gap - (absRate[i] + absRate[j]) * lookaheadMin >= verticalFt) return;
+
+    // Horizontal: even flying straight at each other, do they get within range?
+    const midLat = (lat[i] + lat[j]) / 2;
+    const cosMid = Math.cos(degToRad(midLat));
+    const northNm = (lat[j] - lat[i]) * NM_PER_DEG;
+    const eastNm = (lon[j] - lon[i]) * NM_PER_DEG * cosMid;
+    const limit = (lateralNm + (speedKt[i] + speedKt[j]) * lookaheadHr) * 1.02 + 0.5;
+    if (northNm * northNm + eastNm * eastNm > limit * limit) return;
+
+    // Exact, on a plane centered between the two aircraft.
+    const a = list[i];
+    const b = list[j];
+    const first = a.icao24 < b.icao24;
+    const lo = first ? a : b;
+    const hi = first ? b : a;
+    if (lo.icao24 === hi.icao24) return;
+    const halfEast =
+      (EARTH_RADIUS_M * degToRad(hi.longitude - lo.longitude) * cosMid) / 2;
+    const halfNorth = (EARTH_RADIUS_M * degToRad(hi.latitude - lo.latitude)) / 2;
+    const hit = evaluatePair(
+      toLocalTrack(lo, -halfEast, -halfNorth),
+      toLocalTrack(hi, halfEast, halfNorth),
+      thresholds,
+    );
+    if (hit) found.push(hit);
+  };
+
+  // Fast aircraft are few. Compare each against everything, once.
+  const isFast = new Uint8Array(n);
+  for (const f of fast) isFast[f] = 1;
+  for (const f of fast) {
+    for (let j = 0; j < n; j++) {
+      if (j === f) continue;
+      // A pair of two fast aircraft is taken once, by the lower index.
+      if (isFast[j] && j < f) continue;
+      consider(f, j);
     }
   }
+
+  // Everything else goes through the grid.
+  const reach = reachNm(thresholds, maxOrdinaryKt) * 1.05 + 1;
+  const cellLat = reach / NM_PER_DEG;
+  // Longitude degrees shrink toward the poles. Size the cell for the worst case.
+  const cellLon = cellLat / Math.max(0.05, Math.cos(degToRad(Math.min(maxLat + cellLat, 89))));
+  const cells = new Map<number, number[]>();
+  const STRIDE = 100_000;
+  const cellKey = (cx: number, cy: number) => (cx + 50_000) * STRIDE + (cy + 50_000);
+  const cx = new Int32Array(n);
+  const cy = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (isFast[i]) continue;
+    cx[i] = Math.floor(lon[i] / cellLon);
+    cy[i] = Math.floor(lat[i] / cellLat);
+    const key = cellKey(cx[i], cy[i]);
+    const members = cells.get(key);
+    if (members) members.push(i);
+    else cells.set(key, [i]);
+  }
+
+  // Each cell against itself, and against four of its eight neighbors. The
+  // other four are covered when those neighbors take their turn.
+  const FORWARD: ReadonlyArray<readonly [number, number]> = [
+    [1, 0],
+    [-1, 1],
+    [0, 1],
+    [1, 1],
+  ];
+  for (const members of cells.values()) {
+    const count = members.length;
+    for (let p = 0; p < count; p++) {
+      for (let q = p + 1; q < count; q++) consider(members[p], members[q]);
+    }
+    const first = members[0];
+    for (const [dx, dy] of FORWARD) {
+      const others = cells.get(cellKey(cx[first] + dx, cy[first] + dy));
+      if (!others) continue;
+      for (let p = 0; p < count; p++) {
+        const i = members[p];
+        for (let q = 0; q < others.length; q++) consider(i, others[q]);
+      }
+    }
+  }
+
   return sortConflicts(found);
+}
+
+function toLocalTrack(ac: Aircraft, east: number, north: number): Track {
+  const speed = ktToMps(ac.groundSpeedKt as number);
+  const psi = degToRad(ac.headingDeg as number);
+  return {
+    id: ac.icao24,
+    east,
+    north,
+    vEast: speed * Math.sin(psi),
+    vNorth: speed * Math.cos(psi),
+    altFt: ac.altitudeFt as number,
+    // ASSUMPTION: a missing vertical rate is treated as level flight.
+    vRateFpm:
+      ac.verticalRateFpm !== null && Number.isFinite(ac.verticalRateFpm)
+        ? ac.verticalRateFpm
+        : 0,
+  };
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decodeAircraft, encodeAircraft } from "./wire";
+import { MAX_POSITION_AGE_SEC, projectRow } from "./projection";
+import { decodeSighting, encodeSighting, type SweepEvent, type WireRow } from "./wire";
 
 // National sweep with a stubbed network and fake timers. No request leaves
 // the machine and the 1.1 second spacing does not slow the tests down.
@@ -18,7 +19,7 @@ interface Row {
   seen_pos?: number;
 }
 
-type Reply = (tileIndex: number) => Response;
+type Reply = (call: number) => Response;
 
 function stubFeed(reply: Reply) {
   let call = 0;
@@ -38,10 +39,11 @@ async function load() {
   return import("./nationalFeed");
 }
 
-async function run<T>(promise: Promise<T>): Promise<T> {
-  await vi.runAllTimersAsync();
-  return promise;
-}
+const regions = (events: SweepEvent[]) =>
+  events.filter((e): e is Extract<SweepEvent, { t: "region" }> => e.t === "region");
+const end = (events: SweepEvent[]) =>
+  events.find((e): e is Extract<SweepEvent, { t: "end" }> => e.t === "end")!;
+const allRows = (events: SweepEvent[]): WireRow[] => regions(events).flatMap((r) => r.rows);
 
 describe("national sweep", () => {
   beforeEach(() => {
@@ -56,120 +58,176 @@ describe("national sweep", () => {
     vi.restoreAllMocks();
   });
 
-  it("asks once per region, spaced out, and merges the answers", async () => {
+  it("asks once per region, spaced out, and publishes each region as it arrives", async () => {
     const fetchMock = stubFeed((i) =>
       ok([{ hex: `ac${i}`, flight: `FLT${i}`, lat: 40, lon: -100 + i * 0.1, alt_baro: 30000, gs: 400, track: 90 }]),
     );
-    const { getNationalSnapshot, NATIONAL_TILES } = await load();
-    const result = await run(getNationalSnapshot());
+    const { getNationalSweep, NATIONAL_TILES } = await load();
+    const sweep = getNationalSweep();
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    // The first region is published long before the sweep is over.
+    await vi.advanceTimersByTimeAsync(50);
+    expect(sweep.events[0]).toMatchObject({ t: "start", source: "adsb.fi", regionsTotal: 30 });
+    expect(regions(sweep.events)).toHaveLength(1);
+    expect(sweep.finishedAtMs).toBeNull();
+
+    await vi.runAllTimersAsync();
+    await sweep.done;
     expect(fetchMock).toHaveBeenCalledTimes(NATIONAL_TILES.length);
-    expect(result.snapshot.source).toBe("adsb.fi");
-    expect(result.snapshot.regionsOk).toBe(NATIONAL_TILES.length);
-    expect(result.snapshot.regionsTotal).toBe(NATIONAL_TILES.length);
-    expect(result.snapshot.warning).toBeUndefined();
-    expect(result.snapshot.rows).toHaveLength(NATIONAL_TILES.length);
+    expect(regions(sweep.events)).toHaveLength(NATIONAL_TILES.length);
+    expect(regions(sweep.events).map((r) => r.done)).toEqual(
+      Array.from({ length: 30 }, (_, i) => i + 1),
+    );
+    expect(allRows(sweep.events)).toHaveLength(NATIONAL_TILES.length);
+    const last = end(sweep.events);
+    expect(last.regionsOk).toBe(30);
+    expect(last.warning).toBeUndefined();
+    expect(last.error).toBeUndefined();
     // 29 gaps of 1.1 s between 30 requests.
-    expect(result.snapshot.sweepSec).toBeGreaterThanOrEqual(31);
+    expect(last.sweepSec).toBeGreaterThanOrEqual(31);
     expect(String(fetchMock.mock.calls[0][0])).toContain("opendata.adsb.fi/api/v3/lat/");
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/dist\/250$/);
   });
 
-  it("keeps the freshest sighting of an aircraft seen in two regions and drops ground traffic", async () => {
+  it("visits every region exactly once", async () => {
+    const fetchMock = stubFeed(() => ok([]));
+    const { getNationalSweep, NATIONAL_TILES } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(new Set(urls).size).toBe(NATIONAL_TILES.length);
+  });
+
+  it("only republishes an aircraft when a fresher sighting arrives, and drops ground traffic", async () => {
     stubFeed((i) => {
       if (i === 0) {
         return ok([
-          { hex: "dup", flight: "OLD", lat: 40, lon: -100, alt_baro: 30000, seen_pos: 20 },
+          { hex: "dup", flight: "FIRST", lat: 40, lon: -100, alt_baro: 30000, seen_pos: 20 },
           { hex: "gnd", flight: "TAXI", lat: 40, lon: -101, alt_baro: "ground", gs: 10, track: 90 },
         ]);
       }
-      if (i === 1) return ok([{ hex: "dup", flight: "NEW", lat: 41, lon: -100, alt_baro: 31000, seen_pos: 1 }]);
+      // Fresher: published again. Staler than what was sent: skipped.
+      if (i === 1) return ok([{ hex: "dup", flight: "FRESH", lat: 41, lon: -100, alt_baro: 31000, seen_pos: 1 }]);
+      if (i === 2) return ok([{ hex: "dup", flight: "STALE", lat: 42, lon: -100, alt_baro: 32000, seen_pos: 50 }]);
       return ok([]);
     });
-    const { getNationalSnapshot } = await load();
-    const result = await run(getNationalSnapshot());
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const aircraft = result.snapshot.rows.map(decodeAircraft);
-    expect(aircraft.map((a) => a.icao24)).toEqual(["dup"]);
-    expect(aircraft[0].callsign).toBe("NEW");
-    expect(aircraft[0].altitudeFt).toBe(31000);
+    const { getNationalSweep } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    expect(allRows(sweep.events).map((r) => r[1])).toEqual(["FIRST", "FRESH"]);
   });
 
-  it("reuses a finished sweep and shares one sweep between simultaneous callers", async () => {
+  it("reuses a finished sweep, shares one in progress, and replays for late callers", async () => {
     const fetchMock = stubFeed(() => ok([]));
-    const { getNationalSnapshot, NATIONAL_TILES } = await load();
-    const first = getNationalSnapshot();
-    const second = getNationalSnapshot();
+    const { getNationalSweep, nationalStream, NATIONAL_TILES } = await load();
+    const first = getNationalSweep();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(getNationalSweep()).toBe(first);
+
+    // A caller who arrives mid-sweep gets what was already published.
+    const seen: SweepEvent[] = [];
+    first.subscribe((event) => seen.push(event));
+    expect(seen.length).toBeGreaterThan(2);
+
     await vi.runAllTimersAsync();
-    expect((await first).ok).toBe(true);
-    expect(await second).toBe(await first);
-    await getNationalSnapshot();
+    await first.done;
+    expect(seen).toEqual(first.events);
+    expect(getNationalSweep()).toBe(first);
     expect(fetchMock).toHaveBeenCalledTimes(NATIONAL_TILES.length);
+
+    // The stream is the same events, one JSON object per line.
+    const text = await new Response(nationalStream(first)).text();
+    const lines = text.trim().split("\n").map((line) => JSON.parse(line) as SweepEvent);
+    expect(lines).toEqual(first.events);
+
+    // After a minute a new sweep starts.
+    vi.setSystemTime(Date.now() + 61_000);
+    expect(getNationalSweep()).not.toBe(first);
   });
 
   it("warns when a few regions fail and still returns the rest", async () => {
     stubFeed((i) => (i % 10 === 4 ? new Response("", { status: 500 }) : ok([])));
-    const { getNationalSnapshot, NATIONAL_TILES } = await load();
-    const result = await run(getNationalSnapshot());
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.snapshot.regionsOk).toBe(NATIONAL_TILES.length - 3);
-    expect(result.snapshot.warning).toMatch(/3 of 30 regions did not answer/);
+    const { getNationalSweep } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    const last = end(sweep.events);
+    expect(last.regionsOk).toBe(27);
+    expect(last.error).toBeUndefined();
+    expect(last.warning).toMatch(/3 of 30 regions did not answer/);
+    expect(regions(sweep.events).filter((r) => !r.ok)).toHaveLength(3);
   });
 
-  it("stops early and returns a failure when the feed is down", async () => {
+  it("stops early and ends with an error when the feed is down", async () => {
     const fetchMock = stubFeed(() => new Response("", { status: 503 }));
-    const { getNationalSnapshot } = await load();
-    const result = await run(getNationalSnapshot());
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/0 of 30 regions/);
+    const { getNationalSweep } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    const last = end(sweep.events);
+    expect(last.error).toMatch(/0 of 30 regions/);
+    expect(sweep.failed).toBe(true);
     // Three failures in a row end the sweep. No hammering.
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(JSON.stringify(result)).not.toMatch(/rows|mock/i);
+    expect(allRows(sweep.events)).toEqual([]);
+    // A failed sweep is retried after 15 seconds, not a minute.
+    vi.setSystemTime(Date.now() + 16_000);
+    expect(getNationalSweep()).not.toBe(sweep);
   });
 });
 
 describe("projection and wire format", () => {
-  it("moves a sighting forward along its track and climb, with a cap", async () => {
-    const { projectSighting, MAX_PROJECTION_SEC } = await load();
-    const aircraft = decodeAircraft(["abc", "ABC", 40, -100, 10000, 360, 90, 1200, 1_700_000_000]);
-    const moved = projectSighting({ aircraft, positionUnix: 1_700_000_000 }, 1_700_000_060);
+  const row: WireRow = ["abc", "ABC", 40, -100, 10000, 360, 90, 1200, 1_700_000_000];
+
+  it("moves a sighting forward along its track and climb", () => {
+    const moved = projectRow(row, 1_700_000_060)!;
     // 360 kt for 60 s is 6 NM east, and 1200 fpm for 60 s is 1200 ft up.
     expect(moved.latitude).toBeCloseTo(40, 3);
     expect((moved.longitude + 100) * 60 * Math.cos((40 * Math.PI) / 180)).toBeCloseTo(6, 1);
     expect(moved.altitudeFt).toBeCloseTo(11200, 6);
+    // The stored sighting is not changed.
+    expect(row[3]).toBe(-100);
+  });
 
-    const capped = projectSighting({ aircraft, positionUnix: 1_700_000_000 }, 1_700_009_999);
-    const atCap = projectSighting(
-      { aircraft, positionUnix: 1_700_000_000 },
-      1_700_000_000 + MAX_PROJECTION_SEC,
-    );
-    expect(capped.longitude).toBeCloseTo(atCap.longitude, 9);
+  it("leaves a sighting alone when it is not in the past", () => {
+    const same = projectRow(row, 1_699_999_000)!;
+    expect(same.latitude).toBe(40);
+    expect(same.longitude).toBe(-100);
+  });
 
-    const still = projectSighting({ aircraft, positionUnix: 1_700_000_000 }, 1_699_999_000);
-    expect(still).toBe(aircraft);
+  it("drops a sighting that is too old to project honestly", () => {
+    expect(projectRow(row, 1_700_000_000 + MAX_POSITION_AGE_SEC)).not.toBeNull();
+    expect(projectRow(row, 1_700_000_000 + MAX_POSITION_AGE_SEC + 1)).toBeNull();
+  });
+
+  it("keeps an aircraft with no track in place", () => {
+    const still = projectRow(["x", "X", 40, -100, 5000, null, null, null, 1_700_000_000], 1_700_000_060)!;
+    expect(still.latitude).toBe(40);
+    expect(still.longitude).toBe(-100);
+    expect(still.altitudeFt).toBe(5000);
   });
 
   it("round-trips an aircraft through the compact wire row", () => {
-    const row = encodeAircraft({
-      icao24: "abc123",
-      callsign: "TEST1",
-      latitude: 39.123456,
-      longitude: -104.987654,
-      altitudeFt: 10000.4,
-      geoAltitudeFt: 10100,
-      groundSpeedKt: 299.6,
-      headingDeg: 89.5,
-      verticalRateFpm: -640.2,
-      onGround: false,
-      lastContactUnix: 1_700_000_000,
-    });
-    expect(row).toEqual(["abc123", "TEST1", 39.1235, -104.9877, 10000, 300, 90, -640, 1_700_000_000]);
-    expect(decodeAircraft(row)).toMatchObject({
+    const encoded = encodeSighting(
+      {
+        icao24: "abc123",
+        callsign: "TEST1",
+        latitude: 39.123456,
+        longitude: -104.987654,
+        altitudeFt: 10000.4,
+        geoAltitudeFt: 10100,
+        groundSpeedKt: 299.6,
+        headingDeg: 89.5,
+        verticalRateFpm: -640.2,
+        onGround: false,
+        lastContactUnix: 1_700_000_000,
+      },
+      1_700_000_000.26,
+    );
+    expect(encoded).toEqual(["abc123", "TEST1", 39.1235, -104.9877, 10000, 300, 90, -640, 1_700_000_000.3]);
+    expect(decodeSighting(encoded)).toMatchObject({
       icao24: "abc123",
       altitudeFt: 10000,
       groundSpeedKt: 300,
