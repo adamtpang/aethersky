@@ -10,7 +10,6 @@
   --color-accent: #7eb6d6;
   --color-warn: #f5b942;
   --color-danger: #ff6b5e;
-  --color-mock: #d9b8ff;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -37,15 +36,6 @@ body {
 
 input[type="range"] {
   accent-color: var(--color-accent);
-}
-
-/* Hazard stripe used on the MOCK DATA banner so it cannot be missed. */
-.mock-stripes {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    rgba(217, 184, 255, 0.16) 0 10px,
-    transparent 10px 20px
-  );
 }
 
 /* Leaflet, dark pass. Default OSM tiles are light, so they are darkened in

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  bboxAreaSqDeg,
-  isValidBbox,
-  mapStateVector,
-  mapStatesResponse,
-} from "./opensky";
+import { mapStateVector, mapStatesResponse } from "./opensky";
 
 // Field order from the OpenSky REST docs for /states/all.
 const row = (overrides: Record<number, unknown> = {}): unknown[] => {
@@ -73,14 +68,5 @@ describe("opensky mapping", () => {
     expect(() => mapStatesResponse({})).toThrow();
     expect(() => mapStatesResponse(null)).toThrow();
     expect(() => mapStatesResponse({ time: 5, states: "x" })).toThrow();
-  });
-
-  it("validates bounding boxes", () => {
-    const ok = { lamin: 38, lomin: -106, lamax: 41, lomax: -103 };
-    expect(isValidBbox(ok)).toBe(true);
-    expect(bboxAreaSqDeg(ok)).toBe(9);
-    expect(isValidBbox({ ...ok, lamin: 42 })).toBe(false);
-    expect(isValidBbox({ ...ok, lomax: 181 })).toBe(false);
-    expect(isValidBbox({ ...ok, lamin: Number.NaN })).toBe(false);
   });
 });

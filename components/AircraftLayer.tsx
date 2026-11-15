@@ -89,7 +89,18 @@ export default function AircraftLayer({
       aircraft.map((ac) => {
         const inConflict = conflictIds.has(ac.icao24);
         const selected = ac.icao24 === selectedId;
-        const detail = inConflict || selected ? "full" : baseDetail;
+        // Real traffic is dense. Full labels on every flagged aircraft bury
+        // the map, so they are kept for a small number of flagged aircraft
+        // and for the selected one.
+        const detail: LabelDetail = selected
+          ? "full"
+          : inConflict
+            ? conflictIds.size <= 12
+              ? "full"
+              : zoom >= 7
+                ? "name"
+                : "none"
+            : baseDetail;
         return {
           ac,
           inConflict,
@@ -98,7 +109,7 @@ export default function AircraftLayer({
           vectorEnd: ac.onGround ? null : projectAhead(ac, VECTOR_SECONDS),
         };
       }),
-    [aircraft, conflictIds, selectedId, baseDetail],
+    [aircraft, conflictIds, selectedId, baseDetail, zoom],
   );
 
   return (

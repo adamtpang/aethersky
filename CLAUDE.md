@@ -2,7 +2,9 @@
 
 Advisory only. Not certified. Does not replace ATC, ATIS, TCAS or pilot judgment. Not for navigation.
 
-Read `docs/safety.md` and `docs/tech-spec.md` before changing anything. The disclaimer wording, its always-visible placement, the MOCK DATA banner, and the "demo defaults, not regulatory" threshold labels are safety requirements, not style choices.
+Read `docs/safety.md` and `docs/tech-spec.md` before changing anything. The disclaimer wording, its always-visible placement, the LIVE DATA UNAVAILABLE banner, and the "demo defaults, not regulatory" threshold labels are safety requirements, not style choices.
+
+Real traffic only (Adam, 2026-11-15: "no mock data, i want real only"). The app never draws simulated or scripted aircraft. When no live feed answers it shows nothing and says so. Scripted aircraft live only in test fixtures.
 
 ## Template
 

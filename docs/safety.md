@@ -24,13 +24,17 @@ The conflict predictor is a first-order geometric check:
 
 Do not use the output to point an aircraft, to issue a clearance, or to second-guess ATC.
 
-## Mock data
+## Real traffic only
 
-When the feed is mock, the UI must say MOCK DATA in a way that cannot be missed (a banner, not only a tooltip). Mock conflicts are scripted to exercise the engine. They are not real traffic.
+Changed on November 15, 2026 at the maintainer's direction: the app shows real traffic or nothing. It must never draw simulated, scripted, or replayed aircraft on the map.
+
+When no live feed answers, the UI must say LIVE DATA UNAVAILABLE in a way that cannot be missed (a banner, not only a tooltip), must show no aircraft, and must say that an empty map does not mean an empty sky. Traffic from a failed refresh is dropped, not left on screen.
+
+Scripted aircraft exist only in the test suite (`lib/conflict/scene.fixture.ts`) to exercise the engine.
 
 ## Data terms
 
-OpenSky's terms restrict how the live API may be used. Read [data-sources.md](data-sources.md). Do not hide those terms behind a "live official feed" framing. If live requests fail, fall back to mock data rather than retrying in a tight loop.
+OpenSky's terms restrict how the live API may be used. Read [data-sources.md](data-sources.md). Do not hide those terms behind a "live official feed" framing. If live requests fail, show the unavailable state and back off rather than retrying in a tight loop.
 
 ## Reporting harm
 

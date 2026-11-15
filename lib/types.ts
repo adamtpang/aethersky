@@ -1,4 +1,5 @@
-export type FeedSource = "opensky" | "mock";
+/** Live feeds only. The app never shows simulated traffic. */
+export type FeedSource = "adsb.fi" | "adsb.lol" | "opensky";
 
 export interface Aircraft {
   icao24: string;
@@ -17,9 +18,9 @@ export interface Aircraft {
 export interface AircraftFeed {
   source: FeedSource;
   fetchedAtUnix: number;
-  timeUnix: number | null; // OpenSky `time`, or mock scenario time
+  timeUnix: number | null; // time reported by the feed
   aircraft: Aircraft[];
-  warning?: string; // e.g. rate limited, fell back to mock
+  warning?: string; // e.g. the first feed failed and a backup answered
 }
 
 // Demo defaults, not regulatory minima. See DEMO_DEFAULT_THRESHOLDS.

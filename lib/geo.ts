@@ -1,5 +1,4 @@
 import { EARTH_RADIUS_M } from "./conflict/enu";
-import { MOCK_ORIGIN } from "./mockTraffic";
 import type { Aircraft, BoundingBox } from "./types";
 import { degToRad, ktToMps, radToDeg } from "./units";
 
@@ -59,10 +58,13 @@ export function clampBbox(
   };
 }
 
-/** First live box and first map view: a few degrees around the mock locale. */
+/** Where the map opens: the Denver area, a busy patch of sky to start on. */
+export const DEFAULT_CENTER = { latitude: 39.86, longitude: -104.67 };
+
+/** First live box and first map view: a few degrees around the start point. */
 export const DEFAULT_BBOX: BoundingBox = {
-  lamin: MOCK_ORIGIN.latitude - 0.75,
-  lomin: MOCK_ORIGIN.longitude - 0.9,
-  lamax: MOCK_ORIGIN.latitude + 0.75,
-  lomax: MOCK_ORIGIN.longitude + 0.9,
+  lamin: DEFAULT_CENTER.latitude - 0.75,
+  lomin: DEFAULT_CENTER.longitude - 0.9,
+  lamax: DEFAULT_CENTER.latitude + 0.75,
+  lomax: DEFAULT_CENTER.longitude + 0.9,
 };
