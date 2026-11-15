@@ -2,20 +2,20 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { detectConflicts, pairKey } from "@/lib/conflict";
-import { DEFAULT_BBOX, clampBbox, type ViewBounds } from "@/lib/geo";
+import { detectConflictsRegional, pairKey } from "@/lib/conflict";
 import {
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
   type AircraftFeed,
-  type BoundingBox,
   type ConflictThresholds,
 } from "@/lib/types";
+import { decodeAircraft, type NationalSnapshot } from "@/lib/wire";
 import {
   ALT_FILTER_MAX_FT,
   DEFAULT_FILTERS,
   type DisplayFilters,
 } from "./Filters";
+import MapLegend from "./MapLegend";
 import type { MapFocus } from "./MapView";
 import FeedBanner from "./FeedBanner";
 import Sidebar from "./Sidebar";
@@ -27,10 +27,10 @@ const MapView = dynamic(() => import("./MapView"), {
 });
 
 /**
- * Live poll interval. OpenSky anonymous resolution is 10 seconds and the
- * server caches for 10 seconds, so polling faster would only waste credits.
+ * How often the page asks for the national snapshot. The server refreshes it
+ * about once a minute and shares it with every visitor.
  */
-const LIVE_POLL_MS = 15_000;
+const LIVE_POLL_MS = 60_000;
 
 const NO_AIRCRAFT: Aircraft[] = [];
 
@@ -75,32 +75,28 @@ export default function AppShell() {
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
 
-  const bboxRef = useRef<BoundingBox>(DEFAULT_BBOX);
   const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
     const seq = ++requestSeq.current;
-    const bbox = bboxRef.current;
-    const params = new URLSearchParams({
-      lamin: bbox.lamin.toFixed(2),
-      lomin: bbox.lomin.toFixed(2),
-      lamax: bbox.lamax.toFixed(2),
-      lomax: bbox.lomax.toFixed(2),
-    });
     let next: AircraftFeed | null = null;
     let error: string | null = null;
     try {
-      const res = await fetch(`/api/aircraft?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const data = (await res.json()) as Partial<AircraftFeed> & { error?: string };
-      if (res.ok && data && Array.isArray(data.aircraft)) {
-        next = data as AircraftFeed;
+      const res = await fetch("/api/traffic");
+      const data = (await res.json()) as Partial<NationalSnapshot> & { error?: string };
+      if (res.ok && data && Array.isArray(data.rows) && data.generatedAtUnix) {
+        next = {
+          source: data.source ?? "adsb.fi",
+          fetchedAtUnix: data.generatedAtUnix,
+          timeUnix: data.generatedAtUnix,
+          aircraft: data.rows.map(decodeAircraft),
+          ...(data.warning ? { warning: data.warning } : {}),
+        };
       } else {
-        error = data?.error ?? `The aircraft service answered with status ${res.status}.`;
+        error = data?.error ?? `The traffic service answered with status ${res.status}.`;
       }
     } catch {
-      error = "The aircraft service could not be reached.";
+      error = "The traffic service could not be reached.";
     }
     if (seq !== requestSeq.current) return;
     // On failure the old picture is dropped. Stale traffic is not shown.
@@ -127,7 +123,7 @@ export default function AppShell() {
   // Conflicts are always checked across all traffic, never the filtered view.
   const conflicts = useMemo(
     () =>
-      detectConflicts(aircraft, thresholds),
+      detectConflictsRegional(aircraft, thresholds),
     [aircraft, thresholds],
   );
 
@@ -214,10 +210,6 @@ export default function AppShell() {
     setSelectedPair(null);
   }, []);
 
-  const handleBoundsChange = useCallback((bounds: ViewBounds) => {
-    bboxRef.current = clampBbox(bounds);
-  }, []);
-
   return (
     <>
       {feedError ? <FeedBanner message={feedError} /> : null}
@@ -232,20 +224,22 @@ export default function AppShell() {
             selectedPairKey={selectedPairKey}
             focus={focus}
             onSelectAircraft={handleSelectAircraft}
-            onSelectPair={handleSelectPair}
             onClearSelection={handleClearSelection}
-            onBoundsChange={handleBoundsChange}
           />
+          <MapLegend />
           {feedError ? (
             <MapNotice>
               Live traffic is unavailable, so no aircraft are shown. Retrying
               automatically.
             </MapNotice>
           ) : !feed ? (
-            <MapNotice>Loading live traffic</MapNotice>
+            <MapNotice>
+              Loading live traffic for the whole country. The first load can
+              take up to a minute.
+            </MapNotice>
           ) : aircraft.length === 0 ? (
             <MapNotice>
-              No aircraft reported in this area right now. Pan or zoom the map.
+              The feed reported no airborne aircraft right now.
             </MapNotice>
           ) : null}
         </div>

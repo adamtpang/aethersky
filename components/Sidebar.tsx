@@ -43,6 +43,7 @@ interface SidebarProps {
 }
 
 const LIST_LIMIT = 150;
+const CONFLICT_LIST_LIMIT = 100;
 
 const SOURCES: Record<FeedSource, { name: string; href: string; note: string }> = {
   "adsb.fi": {
@@ -157,7 +158,7 @@ export default function Sidebar({
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#4ade80]" aria-hidden="true" />
               <span className="text-fg">Live</span>
               <span className="text-muted">
-                {` \u00b7 ${source.name} \u00b7 ${totalAircraft} aircraft \u00b7 updated ${fmtClock(feed.fetchedAtUnix)}`}
+                {` \u00b7 ${source.name} \u00b7 ${totalAircraft.toLocaleString("en-US")} airborne \u00b7 ${fmtClock(feed.fetchedAtUnix)}`}
               </span>
             </>
           ) : feedError ? (
@@ -180,8 +181,10 @@ export default function Sidebar({
           </p>
         ) : null}
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          {DATA_CAVEAT_TEXT} Real traffic only: if no live feed answers, the
-          map shows nothing instead of simulated aircraft.
+          {DATA_CAVEAT_TEXT} Contiguous United States, airborne aircraft
+          only, refreshed about once a minute. Positions are up to a minute or
+          two old and are moved forward along each track to the refresh time.
+          Real traffic only: if the feed fails, the map shows nothing.
         </p>
       </Section>
 
@@ -205,7 +208,7 @@ export default function Sidebar({
           </p>
         ) : (
           <ol className="flex flex-col gap-1.5">
-            {conflicts.map((pair) => {
+            {conflicts.slice(0, CONFLICT_LIST_LIMIT).map((pair) => {
               const key = pairKey(pair);
               const active = key === selectedPairKey;
               return (
@@ -254,6 +257,9 @@ export default function Sidebar({
           </ol>
         )}
         <p className="mt-2 text-[11px] leading-snug text-muted">
+          {conflicts.length > CONFLICT_LIST_LIMIT
+            ? `Showing the first ${CONFLICT_LIST_LIMIT} of ${conflicts.length.toLocaleString("en-US")}. `
+            : ""}
           Sorted by time to closest point of approach (CPA). Constant-velocity
           geometry only. Not TCAS and not a resolution advisory.
         </p>
@@ -332,7 +338,8 @@ export default function Sidebar({
         title="Aircraft"
         aside={
           <span className="font-mono text-xs text-muted">
-            {visibleAircraft.length} of {totalAircraft}
+            {visibleAircraft.length.toLocaleString("en-US")} of{" "}
+            {totalAircraft.toLocaleString("en-US")}
           </span>
         }
       >
@@ -341,7 +348,7 @@ export default function Sidebar({
             {!feed
               ? "Waiting for traffic."
               : totalAircraft === 0
-                ? "No aircraft reported in this area."
+                ? "No airborne aircraft reported."
                 : "No aircraft match the current filters."}
           </p>
         ) : (

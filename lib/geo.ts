@@ -68,3 +68,9 @@ export const DEFAULT_BBOX: BoundingBox = {
   lamax: DEFAULT_CENTER.latitude + 0.75,
   lomax: DEFAULT_CENTER.longitude + 0.9,
 };
+
+/** The contiguous United States, as [[south, west], [north, east]]. The map opens here. */
+export const CONUS_BOUNDS: [[number, number], [number, number]] = [
+  [24.5, -125],
+  [49.5, -66.5],
+];
