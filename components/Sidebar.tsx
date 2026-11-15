@@ -20,6 +20,7 @@ import type {
   FeedSource,
 } from "@/lib/types";
 import Filters, { type DisplayFilters } from "./Filters";
+import Logo from "./Logo";
 
 interface SidebarProps {
   feed: AircraftFeed | null;
@@ -120,6 +121,23 @@ export default function Sidebar({
       aria-label="Traffic details and controls"
       className="flex min-h-0 flex-col overflow-y-auto border-line bg-panel text-[13px] lg:border-l"
     >
+      <header className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+        <Logo size={30} />
+        <div className="leading-tight">
+          <p className="text-[15px] font-semibold tracking-tight">aethersky</p>
+          <p className="text-[11px] text-muted">
+            Open-source advisory traffic demo
+          </p>
+        </div>
+        <a
+          href="https://github.com/adamtpang/aethersky"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
+        >
+          GitHub
+        </a>
+      </header>
       <Section
         title="Data source"
         aside={
@@ -400,7 +418,7 @@ export default function Sidebar({
         ) : null}
         <p className="mt-1">
           aethersky is an open-source teaching demo. Thresholds are demo
-          defaults, not FAA, ICAO, or TCAS minima.
+          defaults, not FAA, ICAO, or TCAS minima. Logo icon from Lucide.
         </p>
       </footer>
     </aside>
