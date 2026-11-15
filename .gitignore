@@ -8,3 +8,9 @@ coverage
 .env
 .env*
 !.env.example
+
+# next.js and typescript
+out
+build
+*.tsbuildinfo
+next-env.d.ts
