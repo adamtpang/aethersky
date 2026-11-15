@@ -14,19 +14,17 @@ import {
 } from "@/lib/format";
 import type {
   Aircraft,
-  AircraftFeed,
   ConflictPair,
   ConflictThresholds,
   FeedSource,
 } from "@/lib/types";
 import Filters, { type DisplayFilters } from "./Filters";
+import type { LiveTraffic } from "@/lib/useLiveTraffic";
 import Logo from "./Logo";
 
 interface SidebarProps {
-  feed: AircraftFeed | null;
-  feedError: string | null;
-  loading: boolean;
-  onRefresh: () => void;
+  traffic: LiveTraffic;
+  onOpenStory: () => void;
   conflicts: ConflictPair[];
   byId: ReadonlyMap<string, Aircraft>;
   conflictIds: ReadonlySet<string>;
@@ -93,10 +91,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 export default function Sidebar({
-  feed,
-  feedError,
-  loading,
-  onRefresh,
+  traffic,
+  onOpenStory,
   conflicts,
   byId,
   conflictIds,
@@ -115,7 +111,15 @@ export default function Sidebar({
   const selectedConflicts = selected
     ? conflicts.filter((c) => c.a === selected.icao24 || c.b === selected.icao24)
     : [];
-  const source = feed ? SOURCES[feed.source] : null;
+  const feedError = traffic.error;
+  const hasTraffic = traffic.phase !== "error" && totalAircraft > 0;
+  const source = traffic.source ? SOURCES[traffic.source] : null;
+  const sweepNote =
+    traffic.phase === "loading"
+      ? `loading ${traffic.regionsDone} of ${traffic.regionsTotal} regions`
+      : traffic.sweptAtUnix
+        ? `swept ${fmtClock(traffic.sweptAtUnix)}`
+        : "live";
 
   return (
     <aside
@@ -130,11 +134,18 @@ export default function Sidebar({
             Open-source advisory traffic demo
           </p>
         </div>
+        <button
+          type="button"
+          onClick={onOpenStory}
+          className="ml-auto rounded border border-accent/60 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/20"
+        >
+          What is this?
+        </button>
         <a
           href="https://github.com/adamtpang/aethersky"
           target="_blank"
           rel="noreferrer"
-          className="ml-auto rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
+          className="rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
         >
           GitHub
         </a>
@@ -144,21 +155,21 @@ export default function Sidebar({
         aside={
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={loading}
+            onClick={traffic.refresh}
+            disabled={traffic.refreshing}
             className="rounded px-1.5 py-0.5 text-xs text-accent hover:underline disabled:text-muted/60 disabled:no-underline"
           >
-            {loading ? "Loading" : "Refresh"}
+            {traffic.refreshing ? "Updating" : "Refresh"}
           </button>
         }
       >
         <p className="font-mono text-xs" aria-live="polite">
-          {feed && source ? (
+          {hasTraffic && source ? (
             <>
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#4ade80]" aria-hidden="true" />
               <span className="text-fg">Live</span>
               <span className="text-muted">
-                {` \u00b7 ${source.name} \u00b7 ${totalAircraft.toLocaleString("en-US")} airborne \u00b7 ${fmtClock(feed.fetchedAtUnix)}`}
+                {` \u00b7 ${source.name} \u00b7 ${totalAircraft.toLocaleString("en-US")} airborne \u00b7 ${sweepNote}`}
               </span>
             </>
           ) : feedError ? (
@@ -175,16 +186,21 @@ export default function Sidebar({
             {feedError} Retrying automatically.
           </p>
         ) : null}
-        {feed?.warning ? (
+        {traffic.warning ? (
           <p className="mt-2 rounded border border-line bg-bg px-2 py-1.5 text-xs leading-snug text-muted">
-            {feed.warning}
+            {traffic.warning}
           </p>
         ) : null}
         <p className="mt-2 text-[11px] leading-snug text-muted">
           {DATA_CAVEAT_TEXT} Contiguous United States, airborne aircraft
-          only, refreshed about once a minute. Positions are up to a minute or
-          two old and are moved forward along each track to the refresh time.
+          only, refreshed about once a minute. Every position is an estimate:
+          the last report, moved forward along its track to this moment.
           Real traffic only: if the feed fails, the map shows nothing.
+        </p>
+        <p className="mt-2 font-mono text-[11px] text-muted">
+          {traffic.checked > 0
+            ? `Checked ${traffic.checked.toLocaleString("en-US")} aircraft in ${traffic.detectMs < 10 ? traffic.detectMs.toFixed(1) : Math.round(traffic.detectMs)} ms, off the main thread.`
+            : "Waiting for the first check."}
         </p>
       </Section>
 
@@ -202,7 +218,7 @@ export default function Sidebar({
       >
         {conflicts.length === 0 ? (
           <p className="text-muted">
-            {feed
+            {traffic.phase !== "loading"
               ? "No pairs flagged at the current demo thresholds."
               : "Waiting for traffic."}
           </p>
@@ -345,7 +361,7 @@ export default function Sidebar({
       >
         {visibleAircraft.length === 0 ? (
           <p className="text-muted">
-            {!feed
+            {traffic.phase === "loading"
               ? "Waiting for traffic."
               : totalAircraft === 0
                 ? "No airborne aircraft reported."

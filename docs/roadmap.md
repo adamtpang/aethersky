@@ -23,9 +23,10 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [ ] Confirm the first deploy builds as Next.js. The Framework Preset was changed from the static placeholder to Next.js after a preview build failed with "No Output Directory named public". That failed build published nothing.
 - [x] Check whether OpenSky answers from Vercel. It does not (timed out on November 15, 2026), so it is now the third choice.
 - [x] Check that adsb.fi answers from Vercel. It does (November 15, 2026).
-- [ ] Check that the national sweep finishes on Vercel. It needs a function that can run for about 40 seconds. It was only run on a home machine.
+- [x] Check that the national sweep finishes on Vercel. It does: 30 of 30 regions in 32 seconds, and repeat requests are served from the CDN cache (November 15, 2026).
+- [ ] Check that the streamed version behaves the same on Vercel after the next deploy, including the CDN cache.
 - [ ] Flagged pairs are dominated by slow traffic near airports (588 pairs nationally in one test). Decide on a floor, for example ignoring pairs below a chosen altitude, and label it as a demo setting.
-- [ ] The map does not move between refreshes. Consider gently advancing positions each few seconds, clearly labeled as projected.
+- [x] The map moves between refreshes: positions advance every 5 seconds and are labeled as estimates.
 - [ ] Alaska and Hawaii are not covered.
 - [ ] Get a free adsb.lol key and set `ADSBLOL_API_KEY` in Vercel, so the backup feed has more than 500 requests a day.
 - [ ] Check with adsb.fi that this use is fine. Its open data terms say personal, non-commercial use.

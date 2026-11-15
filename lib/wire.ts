@@ -1,11 +1,19 @@
 import type { Aircraft, FeedSource } from "./types";
 
 /**
- * Compact wire format for the national snapshot. Thousands of aircraft as
- * keyed objects would be a few megabytes, so each aircraft is one array.
+ * Wire format for the national traffic stream. Thousands of aircraft as
+ * keyed objects would be a few megabytes, so each aircraft is one array, and
+ * the response is a stream of JSON lines so the page can draw each region
+ * as soon as it arrives instead of waiting for the whole country.
  */
 
-/** [icao24, callsign, lat, lon, altFt, groundSpeedKt, headingDeg, verticalRateFpm, lastContactUnix] */
+/**
+ * [icao24, callsign, lat, lon, altFt, groundSpeedKt, headingDeg,
+ *  verticalRateFpm, positionUnix]
+ *
+ * The position is as reported, not projected. `positionUnix` is when it was
+ * true, so the page can move every aircraft forward to the same moment.
+ */
 export type WireRow = [
   string,
   string,
@@ -15,21 +23,36 @@ export type WireRow = [
   number | null,
   number | null,
   number | null,
-  number | null,
+  number,
 ];
 
-export interface NationalSnapshot {
-  source: FeedSource;
-  /** When the sweep finished. Every position is projected to this time. */
-  generatedAtUnix: number;
-  /** How long the sweep took, seconds. */
-  sweepSec: number;
-  regionsOk: number;
-  regionsTotal: number;
-  /** Airborne aircraft only. Aircraft on the ground are left out. */
-  rows: WireRow[];
-  warning?: string;
-}
+export type SweepEvent =
+  | {
+      t: "start";
+      source: FeedSource;
+      /** Server clock when the sweep began, unix seconds. */
+      startedAtUnix: number;
+      regionsTotal: number;
+    }
+  | {
+      t: "region";
+      /** Regions finished so far, counting this one. */
+      done: number;
+      ok: boolean;
+      /** Airborne aircraft only. Only sightings fresher than ones already sent. */
+      rows: WireRow[];
+    }
+  | {
+      t: "end";
+      /** Server clock when the sweep finished, unix seconds. */
+      finishedAtUnix: number;
+      sweepSec: number;
+      regionsOk: number;
+      regionsTotal: number;
+      warning?: string;
+      /** Set when too few regions answered. The page then shows no traffic. */
+      error?: string;
+    };
 
 const round = (value: number | null, digits = 0): number | null => {
   if (value === null || !Number.isFinite(value)) return null;
@@ -37,7 +60,7 @@ const round = (value: number | null, digits = 0): number | null => {
   return Math.round(value * f) / f;
 };
 
-export function encodeAircraft(ac: Aircraft): WireRow {
+export function encodeSighting(ac: Aircraft, positionUnix: number): WireRow {
   return [
     ac.icao24,
     ac.callsign,
@@ -47,11 +70,11 @@ export function encodeAircraft(ac: Aircraft): WireRow {
     round(ac.groundSpeedKt),
     round(ac.headingDeg),
     round(ac.verticalRateFpm),
-    ac.lastContactUnix,
+    round(positionUnix, 1) as number,
   ];
 }
 
-export function decodeAircraft(row: WireRow): Aircraft {
+export function decodeSighting(row: WireRow): Aircraft {
   return {
     icao24: row[0],
     callsign: row[1],
@@ -63,6 +86,6 @@ export function decodeAircraft(row: WireRow): Aircraft {
     headingDeg: row[6],
     verticalRateFpm: row[7],
     onGround: false,
-    lastContactUnix: row[8],
+    lastContactUnix: Math.round(row[8]),
   };
 }

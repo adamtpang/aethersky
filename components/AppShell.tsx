@@ -1,15 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { detectConflictsRegional, pairKey } from "@/lib/conflict";
+import { useCallback, useMemo, useState } from "react";
+import { pairKey } from "@/lib/conflict";
 import {
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
-  type AircraftFeed,
   type ConflictThresholds,
 } from "@/lib/types";
-import { decodeAircraft, type NationalSnapshot } from "@/lib/wire";
+import { useLiveTraffic } from "@/lib/useLiveTraffic";
+import FeedBanner from "./FeedBanner";
 import {
   ALT_FILTER_MAX_FT,
   DEFAULT_FILTERS,
@@ -17,22 +17,14 @@ import {
 } from "./Filters";
 import MapLegend from "./MapLegend";
 import type { MapFocus } from "./MapView";
-import FeedBanner from "./FeedBanner";
 import Sidebar from "./Sidebar";
+import StoryPanel from "./StoryPanel";
 
 // Leaflet needs the browser, so the map is loaded on the client only.
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
   loading: () => <MapNotice>Loading map</MapNotice>,
 });
-
-/**
- * How often the page asks for the national snapshot. The server refreshes it
- * about once a minute and shares it with every visitor.
- */
-const LIVE_POLL_MS = 60_000;
-
-const NO_AIRCRAFT: Aircraft[] = [];
 
 function MapNotice({ children }: { children: React.ReactNode }) {
   return (
@@ -57,16 +49,11 @@ function matchesFilters(ac: Aircraft, filters: DisplayFilters): boolean {
     filters.altMinFt <= 0 && filters.altMaxFt >= ALT_FILTER_MAX_FT;
   if (bandIsOpen) return true;
   // With a narrowed band, aircraft with no usable altitude are hidden.
-  if (ac.onGround || ac.altitudeFt === null) return false;
+  if (ac.altitudeFt === null) return false;
   return ac.altitudeFt >= filters.altMinFt && ac.altitudeFt <= filters.altMaxFt;
 }
 
 export default function AppShell() {
-  // Real traffic only. When no live feed answers, the map shows no aircraft
-  // and says so. Simulated traffic is never substituted.
-  const [feed, setFeed] = useState<AircraftFeed | null>(null);
-  const [feedError, setFeedError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [thresholds, setThresholds] = useState<ConflictThresholds>(
     DEMO_DEFAULT_THRESHOLDS,
   );
@@ -74,57 +61,16 @@ export default function AppShell() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
 
-  const requestSeq = useRef(0);
-
-  const load = useCallback(async () => {
-    const seq = ++requestSeq.current;
-    let next: AircraftFeed | null = null;
-    let error: string | null = null;
-    try {
-      const res = await fetch("/api/traffic");
-      const data = (await res.json()) as Partial<NationalSnapshot> & { error?: string };
-      if (res.ok && data && Array.isArray(data.rows) && data.generatedAtUnix) {
-        next = {
-          source: data.source ?? "adsb.fi",
-          fetchedAtUnix: data.generatedAtUnix,
-          timeUnix: data.generatedAtUnix,
-          aircraft: data.rows.map(decodeAircraft),
-          ...(data.warning ? { warning: data.warning } : {}),
-        };
-      } else {
-        error = data?.error ?? `The traffic service answered with status ${res.status}.`;
-      }
-    } catch {
-      error = "The traffic service could not be reached.";
-    }
-    if (seq !== requestSeq.current) return;
-    // On failure the old picture is dropped. Stale traffic is not shown.
-    setFeed(next);
-    setFeedError(error);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const timer = setInterval(() => {
-      if (!document.hidden) void load();
-    }, LIVE_POLL_MS);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  const aircraft = feed?.aircraft ?? NO_AIRCRAFT;
+  // Real traffic only. When the feed fails, the map shows no aircraft and
+  // says so. Simulated traffic is never substituted.
+  const traffic = useLiveTraffic(thresholds);
+  const { aircraft, conflicts } = traffic;
 
   const byId = useMemo(
     () => new Map(aircraft.map((ac) => [ac.icao24, ac])),
     [aircraft],
-  );
-
-  // Conflicts are always checked across all traffic, never the filtered view.
-  const conflicts = useMemo(
-    () =>
-      detectConflictsRegional(aircraft, thresholds),
-    [aircraft, thresholds],
   );
 
   const conflictIds = useMemo(() => {
@@ -136,6 +82,8 @@ export default function AppShell() {
     return ids;
   }, [conflicts]);
 
+  // Conflicts are checked across all traffic. Filters only narrow what is
+  // drawn and listed, and never hide an aircraft in a flagged pair.
   const visibleAircraft = useMemo(
     () =>
       aircraft.filter(
@@ -158,11 +106,6 @@ export default function AppShell() {
         : visibleAircraft,
     [visibleAircraft, selected],
   );
-
-  const handleRefresh = useCallback(() => {
-    setLoading(true);
-    void load();
-  }, [load]);
 
   const handleSelectAircraft = useCallback((icao24: string) => {
     setSelectedId(icao24);
@@ -210,10 +153,12 @@ export default function AppShell() {
     setSelectedPair(null);
   }, []);
 
+  const firstLoad = traffic.phase === "loading";
+
   return (
     <>
-      {feedError ? <FeedBanner message={feedError} /> : null}
-      <main className="grid min-h-0 flex-1 grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-1">
+      {traffic.error ? <FeedBanner message={traffic.error} /> : null}
+      <main className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-1">
         <div className="relative min-h-0 bg-bg">
           <MapView
             aircraft={mapAircraft}
@@ -227,27 +172,23 @@ export default function AppShell() {
             onClearSelection={handleClearSelection}
           />
           <MapLegend />
-          {feedError ? (
+          {traffic.error ? (
             <MapNotice>
               Live traffic is unavailable, so no aircraft are shown. Retrying
               automatically.
             </MapNotice>
-          ) : !feed ? (
+          ) : firstLoad ? (
             <MapNotice>
-              Loading live traffic for the whole country. The first load can
-              take up to a minute.
+              {traffic.regionsTotal > 0
+                ? `Loading live traffic: ${traffic.regionsDone} of ${traffic.regionsTotal} regions`
+                : "Loading live traffic"}
             </MapNotice>
           ) : aircraft.length === 0 ? (
-            <MapNotice>
-              The feed reported no airborne aircraft right now.
-            </MapNotice>
+            <MapNotice>The feed reported no airborne aircraft right now.</MapNotice>
           ) : null}
         </div>
         <Sidebar
-          feed={feed}
-          feedError={feedError}
-          loading={loading}
-          onRefresh={handleRefresh}
+          traffic={traffic}
           conflicts={conflicts}
           byId={byId}
           conflictIds={conflictIds}
@@ -257,11 +198,13 @@ export default function AppShell() {
           selectedPairKey={selectedPairKey}
           onSelectAircraft={handleSelectFromList}
           onSelectPair={handleSelectPair}
+          onOpenStory={() => setStoryOpen(true)}
           filters={filters}
           thresholds={thresholds}
           onFiltersChange={setFilters}
           onThresholdsChange={setThresholds}
         />
+        <StoryPanel open={storyOpen} onOpenChange={setStoryOpen} />
       </main>
     </>
   );

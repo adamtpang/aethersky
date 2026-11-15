@@ -30,7 +30,9 @@ Changed on November 15, 2026 at the maintainer's direction: the app shows real t
 
 When no live feed answers, the UI must say LIVE DATA UNAVAILABLE in a way that cannot be missed (a banner, not only a tooltip), must show no aircraft, and must say that an empty map does not mean an empty sky. Traffic from a failed refresh is dropped, not left on screen.
 
-On the national map every position is an estimate: the last reported position moved forward along its track to the refresh time. The UI must say so near the data source, and must say that the picture is up to a minute or two old.
+On the national map every position is an estimate: the last reported position moved forward along its track to the current moment. The UI must say so near the data source. A report older than 120 seconds must be removed, not projected further.
+
+The "What is this?" panel must keep saying plainly that this page would not have prevented the November 13, 2026 ground stop, and must never cover the disclaimer bar.
 
 Scripted aircraft exist only in the test suite (`lib/conflict/scene.fixture.ts`) to exercise the engine.
 

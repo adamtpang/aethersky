@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app opens on the whole contiguous United States with live airborne traffic, with no credentials needed. The first load can take up to a minute while the server gathers the country. It shows real traffic only. If no live feed answers, the map shows no aircraft and a LIVE DATA UNAVAILABLE banner. It never substitutes simulated traffic.
+Open http://localhost:3000. The app opens on the whole contiguous United States with live airborne traffic, with no credentials needed. Aircraft appear within a second or two and fill in region by region, busiest airspace first. A full pass over the country takes about 35 seconds. It shows real traffic only. If no live feed answers, the map shows no aircraft and a LIVE DATA UNAVAILABLE banner. It never substitutes simulated traffic.
 
 Other commands:
 
@@ -25,13 +25,13 @@ Other commands:
 - `npm run build` makes a production build
 - `npm run lint` and `npm run typecheck` check the code
 
-No feed answers one request for the whole country, so the server sweeps it: `/api/traffic` asks [adsb.fi](https://adsb.fi) for 30 overlapping circles of 250 NM, one request at a time to stay inside its limit of 1 request per second. A sweep takes about 35 seconds, is shared by every visitor, and is refreshed about once a minute. Each position is moved forward along its track to the moment the sweep finished. Aircraft on the ground are left out. Alaska and Hawaii are not covered.
+No feed answers one request for the whole country, so the server sweeps it: `/api/traffic` asks [adsb.fi](https://adsb.fi) for 30 overlapping circles of 250 NM, one request at a time to stay inside its limit of 1 request per second. A sweep takes about 35 seconds, is shared by every visitor, and is refreshed about once a minute. The route streams each region as it arrives, so the page can draw it straight away. The page then moves every aircraft forward along its track to the current moment every 5 seconds, so every position on the map is an estimate. A report older than 120 seconds is dropped. Aircraft on the ground are left out. Alaska and Hawaii are not covered.
 
 A second route, `/api/aircraft`, returns one bounding box and tries three feeds in order: adsb.fi, then [adsb.lol](https://adsb.lol), then [OpenSky](https://opensky-network.org). The app no longer uses it, but it is handy for forks. All three feeds work with no key. Optional keys go in `.env.local` (copy `.env.example`): `ADSBLOL_API_KEY` raises the adsb.lol daily limit, and `OPENSKY_CLIENT_ID` with `OPENSKY_CLIENT_SECRET` raises the OpenSky one. Never commit that file.
 
 ## How the check works
 
-Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. Across a whole country one plane would be badly stretched, so the traffic is cut into regions that propose candidate pairs, and each candidate is measured on its own small plane centered between the two aircraft. For every pair, the app finds the time and horizontal distance of closest approach inside the lookahead window, and the vertical separation at that time. A pair is flagged when both are under the thresholds.
+Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. Across a whole country one plane would be badly stretched, so the traffic is sorted into a grid, two cheap tests throw out pairs that cannot possibly close in time, and each remaining pair is measured on its own small plane centered between the two aircraft. The check runs in a background worker. On a laptop it covers about 5,600 aircraft in 10 to 20 milliseconds, and the sidebar shows the live figure. For every pair, the app finds the time and horizontal distance of closest approach inside the lookahead window, and the vertical separation at that time. A pair is flagged when both are under the thresholds.
 
 The shipped thresholds are 5 NM lateral, 1000 ft vertical, and 120 s lookahead. They are demo defaults, not regulatory minimums, and the sliders say so. Aircraft on the ground are never paired. The engine lives in `lib/conflict` as plain TypeScript with no framework code, so it is easy to read, test, and replace.
 

@@ -30,4 +30,4 @@ export {
   toTrack,
   type DetectOptions,
 } from "./detect";
-export { REGION_SIZE_DEG, detectConflictsRegional, reachNm } from "./regional";
+export { FAST_AIRCRAFT_KT, detectConflictsRegional, reachNm } from "./regional";
