@@ -75,7 +75,10 @@ const INITIAL_META: Meta = {
  *
  * Real traffic only: when a sweep fails, every aircraft is removed.
  */
-export function useLiveTraffic(thresholds: ConflictThresholds): LiveTraffic {
+export function useLiveTraffic(
+  thresholds: ConflictThresholds,
+  checkFloorFt: number,
+): LiveTraffic {
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [conflicts, setConflicts] = useState<ConflictPair[]>([]);
   const [meta, setMeta] = useState<Meta>(INITIAL_META);
@@ -255,22 +258,29 @@ export function useLiveTraffic(thresholds: ConflictThresholds): LiveTraffic {
   useEffect(() => {
     const id = ++requestIdRef.current;
     const worker = workerRef.current;
+    // Aircraft below the floor are drawn but left out of the check.
+    const candidates =
+      checkFloorFt > 0
+        ? aircraft.filter(
+            (ac) => ac.altitudeFt !== null && ac.altitudeFt >= checkFloorFt,
+          )
+        : aircraft;
     if (worker) {
-      const request: DetectRequest = { id, aircraft, thresholds };
+      const request: DetectRequest = { id, aircraft: candidates, thresholds };
       worker.postMessage(request);
       return;
     }
     const timer = setTimeout(() => {
       const startedAt = performance.now();
-      const found = detectConflictsRegional(aircraft, thresholds);
+      const found = detectConflictsRegional(candidates, thresholds);
       const ms = performance.now() - startedAt;
       perfStats.detectMs = ms;
-      perfStats.checked = aircraft.length;
+      perfStats.checked = candidates.length;
       setConflicts(found);
-      setTiming({ detectMs: ms, checked: aircraft.length });
+      setTiming({ detectMs: ms, checked: candidates.length });
     }, 0);
     return () => clearTimeout(timer);
-  }, [aircraft, thresholds]);
+  }, [aircraft, thresholds, checkFloorFt]);
 
   return {
     aircraft,

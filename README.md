@@ -4,9 +4,37 @@ Advisory only. Not certified. Does not replace ATC, ATIS, TCAS or pilot judgment
 
 aethersky is a free, non-certified public demo: a web map that shows public ADS-B traffic and runs a simple geometric conflict check (time and distance of closest approach, plus a vertical filter). It is a starter that anyone can fork and improve. It is not a certified avionics product, not an ATC system, and not a navigation source.
 
-Live placeholder: [https://aethersky.vercel.app](https://aethersky.vercel.app)
+**Live: [https://aethersky.vercel.app](https://aethersky.vercel.app)**
 
-This repository holds the first version of the app, the safety rules, and the build brief it was written from. See [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md) and [docs/tech-spec.md](docs/tech-spec.md). The live placeholder above may still show the earlier holding page until the maintainer deploys.
+![Live aircraft over the contiguous United States, with flagged pairs ringed in amber](docs/screenshots/whole-country.jpg)
+
+![A close view: hollow diamonds with track lines and controller-style data blocks](docs/screenshots/data-blocks.jpg)
+
+It would not have prevented the November 13, 2026 ground stop, and it says so on the page. It is a picture of one idea, drawn in the open so people can argue with it and improve it. The background is in [Why this exists](#why-this-exists).
+
+## Hack on it
+
+Fork it. The pieces are small and separate on purpose.
+
+| You want to change | Look in | Notes |
+| --- | --- | --- |
+| The conflict math | `lib/conflict/` | Plain TypeScript, no React. `cpa.ts` is the whole rule in about 100 lines. Fixtures F1 through F8 in `detect.test.ts` are the contract. |
+| How a whole country is checked fast | `lib/conflict/regional.ts` | Grid, two cheap rejections, then the exact test per pair. |
+| Where traffic comes from | `lib/nationalFeed.ts`, `lib/readsb.ts` | A sweep of 30 circles from adsb.fi, streamed as JSON lines. Swap in your own receiver here. |
+| How the map is drawn | `components/TrafficCanvas.tsx` | One canvas. No DOM markers. |
+| The look | `docs/design-language.md`, `app/globals.css` | "Scope glass": the rules and the tokens. |
+| The story panel | `components/StoryPanel.tsx` | Keep it honest. |
+
+Good first projects:
+
+- Replace the straight-line check with a published method that understands turns and climbs.
+- Replay recorded traffic and count how often the check cries wolf.
+- Feed it from a cheap ADS-B radio receiver instead of the internet. That is the version that keeps working when a network is down.
+- Add layers: weather, airport delays, flight restrictions.
+
+House rules, all in [docs/safety.md](docs/safety.md): the disclaimer stays, real traffic only, and every threshold is labeled a demo default. Share a view with a link: the address bar holds the map position, for example `#10/40.640/-73.780`.
+
+The build brief the first version was written from is in [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md) and [docs/tech-spec.md](docs/tech-spec.md).
 
 ## Run it locally
 
@@ -33,7 +61,7 @@ A second route, `/api/aircraft`, returns one bounding box and tries three feeds 
 
 Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. Across a whole country one plane would be badly stretched, so the traffic is sorted into a grid, two cheap tests throw out pairs that cannot possibly close in time, and each remaining pair is measured on its own small plane centered between the two aircraft. The check runs in a background worker. On a laptop it covers about 5,600 aircraft in 10 to 20 milliseconds, and the sidebar shows the live figure. For every pair, the app finds the time and horizontal distance of closest approach inside the lookahead window, and the vertical separation at that time. A pair is flagged when both are under the thresholds.
 
-The shipped thresholds are 5 NM lateral, 1000 ft vertical, and 120 s lookahead. They are demo defaults, not regulatory minimums, and the sliders say so. Aircraft on the ground are never paired. The engine lives in `lib/conflict` as plain TypeScript with no framework code, so it is easy to read, test, and replace.
+The shipped thresholds are 5 NM lateral, 1000 ft vertical, and 120 s lookahead. They are demo defaults, not regulatory minimums, and the sliders say so. Aircraft below 10,000 ft are drawn but left out of the check by default, because traffic near airports is close together on purpose and a straight-line check would flag hundreds of those pairs. That floor is also a demo default, and it can be set to 0. Aircraft on the ground are never paired. The engine lives in `lib/conflict` as plain TypeScript with no framework code, so it is easy to read, test, and replace.
 
 ## Disclaimer
 
@@ -104,6 +132,7 @@ The name "Schafer" is written here without a diacritic only to keep this file in
 - [docs/safety.md](docs/safety.md): safety rules and disclaimer requirements
 - [docs/data-sources.md](docs/data-sources.md): live feeds and their terms, citations
 - [docs/roadmap.md](docs/roadmap.md): first build, then later ideas
+- [docs/design-language.md](docs/design-language.md): the "Scope glass" look, its rules and tokens
 - [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md)
 
 ## Credits

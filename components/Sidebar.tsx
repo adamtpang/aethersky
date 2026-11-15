@@ -21,6 +21,7 @@ import type {
 import Filters, { type DisplayFilters } from "./Filters";
 import type { LiveTraffic } from "@/lib/useLiveTraffic";
 import Logo from "./Logo";
+import MapLegend from "./MapLegend";
 
 interface SidebarProps {
   traffic: LiveTraffic;
@@ -36,6 +37,8 @@ interface SidebarProps {
   onSelectPair: (key: string) => void;
   filters: DisplayFilters;
   thresholds: ConflictThresholds;
+  checkFloorFt: number;
+  onCheckFloorChange: (next: number) => void;
   onFiltersChange: (next: DisplayFilters) => void;
   onThresholdsChange: (next: ConflictThresholds) => void;
 }
@@ -104,6 +107,8 @@ export default function Sidebar({
   onSelectPair,
   filters,
   thresholds,
+  checkFloorFt,
+  onCheckFloorChange,
   onFiltersChange,
   onThresholdsChange,
 }: SidebarProps) {
@@ -128,16 +133,14 @@ export default function Sidebar({
     >
       <header className="flex items-center gap-2.5 border-b border-line px-4 py-3">
         <Logo size={30} />
-        <div className="leading-tight">
+        <div className="min-w-0 leading-tight">
           <p className="text-[15px] font-semibold tracking-tight">aethersky</p>
-          <p className="text-[11px] text-muted">
-            Open-source advisory traffic demo
-          </p>
+          <p className="truncate text-[11px] text-muted">Advisory demo</p>
         </div>
         <button
           type="button"
           onClick={onOpenStory}
-          className="ml-auto rounded border border-accent/60 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/20"
+          className="ml-auto shrink-0 whitespace-nowrap border border-accent/60 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/20"
         >
           What is this?
         </button>
@@ -145,11 +148,13 @@ export default function Sidebar({
           href="https://github.com/adamtpang/aethersky"
           target="_blank"
           rel="noreferrer"
-          className="rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
+          className="shrink-0 border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
         >
           GitHub
         </a>
       </header>
+      <MapLegend inline />
+
       <Section
         title="Data source"
         aside={
@@ -219,7 +224,9 @@ export default function Sidebar({
         {conflicts.length === 0 ? (
           <p className="text-muted">
             {traffic.phase !== "loading"
-              ? "No pairs flagged at the current demo thresholds."
+              ? checkFloorFt > 0
+                ? `No pairs flagged above ${checkFloorFt.toLocaleString("en-US")} ft at the current demo thresholds.`
+                : "No pairs flagged at the current demo thresholds."
               : "Waiting for traffic."}
           </p>
         ) : (
@@ -345,6 +352,8 @@ export default function Sidebar({
         <Filters
           filters={filters}
           thresholds={thresholds}
+          checkFloorFt={checkFloorFt}
+          onCheckFloorChange={onCheckFloorChange}
           onFiltersChange={onFiltersChange}
           onThresholdsChange={onThresholdsChange}
         />

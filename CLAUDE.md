@@ -12,6 +12,10 @@ Scaffolded on 2026-11-15 from the official Next.js starter, `create-next-app@16.
 
 This Next.js version differs from older ones. Read the matching guide in `node_modules/next/dist/docs/` before using a Next.js API.
 
+## Design
+
+The look is "Scope glass". Read `docs/design-language.md` before changing UI. No component library. Every map state has its own shape as well as its own color.
+
 ## Rules
 
 - No em dashes anywhere (code, comments, UI copy, commits, PR text).

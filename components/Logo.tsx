@@ -18,11 +18,11 @@ export default function Logo({ size = 28, className }: LogoProps) {
       role="img"
       aria-label="aethersky"
     >
-      <rect width="64" height="64" rx="14" fill="#0b0d10" stroke="#262c35" />
+      <rect width="64" height="64" rx="14" fill="#000000" stroke="#1c252e" />
       <g
         transform="translate(11 11) scale(1.75)"
         fill="none"
-        stroke="#7eb6d6"
+        stroke="#35d0e0"
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"

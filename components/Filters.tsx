@@ -2,6 +2,7 @@
 
 import { THRESHOLD_LABEL } from "@/lib/disclaimer";
 import {
+  DEMO_DEFAULT_CHECK_FLOOR_FT,
   DEMO_DEFAULT_THRESHOLDS,
   type ConflictThresholds,
 } from "@/lib/types";
@@ -23,6 +24,8 @@ export const DEFAULT_FILTERS: DisplayFilters = {
 interface FiltersProps {
   filters: DisplayFilters;
   thresholds: ConflictThresholds;
+  checkFloorFt: number;
+  onCheckFloorChange: (next: number) => void;
   onFiltersChange: (next: DisplayFilters) => void;
   onThresholdsChange: (next: ConflictThresholds) => void;
 }
@@ -54,12 +57,14 @@ const clampAlt = (value: string): number => {
 export default function Filters({
   filters,
   thresholds,
+  checkFloorFt,
+  onCheckFloorChange,
   onFiltersChange,
   onThresholdsChange,
 }: FiltersProps) {
-  const thresholdsAreDefault = SLIDERS.every(
-    (s) => thresholds[s.key] === DEMO_DEFAULT_THRESHOLDS[s.key],
-  );
+  const thresholdsAreDefault =
+    checkFloorFt === DEMO_DEFAULT_CHECK_FLOOR_FT &&
+    SLIDERS.every((s) => thresholds[s.key] === DEMO_DEFAULT_THRESHOLDS[s.key]);
   const filtersAreDefault =
     filters.search === "" &&
     filters.altMinFt === 0 &&
@@ -74,7 +79,10 @@ export default function Filters({
           </h2>
           <button
             type="button"
-            onClick={() => onThresholdsChange(DEMO_DEFAULT_THRESHOLDS)}
+            onClick={() => {
+              onThresholdsChange(DEMO_DEFAULT_THRESHOLDS);
+              onCheckFloorChange(DEMO_DEFAULT_CHECK_FLOOR_FT);
+            }}
             disabled={thresholdsAreDefault}
             className="rounded px-1.5 py-0.5 text-xs text-accent hover:underline disabled:cursor-default disabled:text-muted/60 disabled:no-underline"
           >
@@ -112,6 +120,35 @@ export default function Filters({
               />
             </label>
           ))}
+          <label className="block text-[13px]">
+            <span className="flex items-baseline justify-between">
+              <span className="text-muted">Check floor</span>
+              <span className="font-mono tabular-nums">
+                {checkFloorFt === 0
+                  ? "off"
+                  : `${checkFloorFt.toLocaleString("en-US")} ft`}
+                <span className="ml-2 text-[11px] text-muted">
+                  demo default{" "}
+                  {DEMO_DEFAULT_CHECK_FLOOR_FT.toLocaleString("en-US")}
+                </span>
+              </span>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={18000}
+              step={1000}
+              value={checkFloorFt}
+              onChange={(e) => onCheckFloorChange(Number(e.target.value))}
+              className="mt-1 w-full"
+            />
+          </label>
+          <p className="text-[11px] leading-snug text-muted">
+            Aircraft below the floor are drawn but not checked. Near airports,
+            traffic is close together on purpose, under air traffic control,
+            and a straight-line check would flag hundreds of those pairs. Set
+            the floor to 0 to check everything.
+          </p>
         </div>
       </section>
 

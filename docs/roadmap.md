@@ -24,8 +24,8 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Check whether OpenSky answers from Vercel. It does not (timed out on November 15, 2026), so it is now the third choice.
 - [x] Check that adsb.fi answers from Vercel. It does (November 15, 2026).
 - [x] Check that the national sweep finishes on Vercel. It does: 30 of 30 regions in 32 seconds, and repeat requests are served from the CDN cache (November 15, 2026).
-- [ ] Check that the streamed version behaves the same on Vercel after the next deploy, including the CDN cache.
-- [ ] Flagged pairs are dominated by slow traffic near airports (588 pairs nationally in one test). Decide on a floor, for example ignoring pairs below a chosen altitude, and label it as a demo setting.
+- [x] Check that the streamed version behaves the same on Vercel. It does: regions arrive one by one, and repeat requests are served from the CDN cache in 0.2 seconds (November 15, 2026).
+- [x] Flagged pairs were dominated by slow traffic near airports (about 480 nationally). An adjustable check floor, default 10,000 ft and labeled a demo default, cut that to about 27 in one test.
 - [x] The map moves between refreshes: positions advance every 5 seconds and are labeled as estimates.
 - [ ] Alaska and Hawaii are not covered.
 - [ ] Get a free adsb.lol key and set `ADSBLOL_API_KEY` in Vercel, so the backup feed has more than 500 requests a day.
@@ -37,7 +37,9 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [ ] Watch feed limits once the site has visitors. All visitors share the server address, so adsb.fi (1 request a second) and adsb.lol (500 a day) limits are shared too.
 - [ ] Decide whether to check vertical separation across the whole lookahead window. Today it is checked only at the moment of closest horizontal approach, as the tech spec defines it, so a pair inside both thresholds at some other moment is not flagged.
 - [ ] Wire in PostHog with `tools/analytics/posthog-rollout.mjs` and add the site to `fleet.json`. This was outside the first brief.
-- [ ] Reduce label overlap when aircraft are close together at low zoom.
+- [x] Labels are now data blocks drawn only when zoomed in and when at most 120 aircraft are in view.
+- [x] Scope glass design pass (see design-language.md).
+- [ ] Look at the site on a real phone. Layout was measured at 375 px wide, not seen on a device.
 
 ## Later, only after the MVP is honest and reviewed
 

@@ -85,7 +85,7 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="story-title"
-        className="w-full max-w-2xl rounded-lg border border-line bg-panel shadow-2xl"
+        className="w-full max-w-2xl border border-line bg-panel font-[family-name:var(--font-prose)] shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>

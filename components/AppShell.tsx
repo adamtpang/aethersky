@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import { pairKey } from "@/lib/conflict";
 import {
+  DEMO_DEFAULT_CHECK_FLOOR_FT,
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
   type ConflictThresholds,
@@ -57,6 +58,7 @@ export default function AppShell() {
   const [thresholds, setThresholds] = useState<ConflictThresholds>(
     DEMO_DEFAULT_THRESHOLDS,
   );
+  const [checkFloorFt, setCheckFloorFt] = useState(DEMO_DEFAULT_CHECK_FLOOR_FT);
   const [filters, setFilters] = useState<DisplayFilters>(DEFAULT_FILTERS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function AppShell() {
 
   // Real traffic only. When the feed fails, the map shows no aircraft and
   // says so. Simulated traffic is never substituted.
-  const traffic = useLiveTraffic(thresholds);
+  const traffic = useLiveTraffic(thresholds, checkFloorFt);
   const { aircraft, conflicts } = traffic;
 
   const byId = useMemo(
@@ -201,6 +203,8 @@ export default function AppShell() {
           onOpenStory={() => setStoryOpen(true)}
           filters={filters}
           thresholds={thresholds}
+          checkFloorFt={checkFloorFt}
+          onCheckFloorChange={setCheckFloorFt}
           onFiltersChange={setFilters}
           onThresholdsChange={setThresholds}
         />
