@@ -6,7 +6,32 @@ aethersky is a free, non-certified public demo: a web map that shows public ADS-
 
 Live placeholder: [https://aethersky.vercel.app](https://aethersky.vercel.app)
 
-The app itself is not built yet. This repository holds the placeholder, the safety rules, and a build brief for the first version. See [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md) and [docs/tech-spec.md](docs/tech-spec.md).
+This repository holds the first version of the app, the safety rules, and the build brief it was written from. See [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md) and [docs/tech-spec.md](docs/tech-spec.md). The live placeholder above may still show the earlier holding page until the maintainer deploys.
+
+## Run it locally
+
+Requires Node.js 20.19 or newer (22 or 24 recommended).
+
+```
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. The app starts on deterministic mock traffic with a MOCK DATA banner, so it works with no network access to OpenSky and no credentials.
+
+Other commands:
+
+- `npm test` runs the Vitest suite, including conflict fixtures F1 through F8 from the tech spec
+- `npm run build` makes a production build
+- `npm run lint` and `npm run typecheck` check the code
+
+Live traffic is opt-in. Pick "Live (OpenSky)" in the sidebar and the app asks its own `/api/aircraft` route for the current map view, clamped to a small box. Anonymous access works with low limits. To use your own OpenSky OAuth2 client, copy `.env.example` to `.env.local` and set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`. Never commit that file. Any live failure (rate limit, blocked host, network error) falls back to mock traffic and says so on screen.
+
+## How the check works
+
+Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. For every pair, the app finds the time and horizontal distance of closest approach inside the lookahead window, and the vertical separation at that time. A pair is flagged when both are under the thresholds.
+
+The shipped thresholds are 5 NM lateral, 1000 ft vertical, and 120 s lookahead. They are demo defaults, not regulatory minimums, and the sliders say so. Aircraft on the ground are never paired. The engine lives in `lib/conflict` as plain TypeScript with no framework code, so it is easy to read, test, and replace.
 
 ## Disclaimer
 
