@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app starts on live OpenSky traffic around the Denver area, with no credentials needed. If OpenSky cannot be reached or is rate limited, it falls back to deterministic mock traffic with a MOCK DATA banner, so it still works offline.
+Open http://localhost:3000. The app starts on live traffic around the Denver area, with no credentials needed. It shows real traffic only. If no live feed answers, the map shows no aircraft and a LIVE DATA UNAVAILABLE banner. It never substitutes simulated traffic.
 
 Other commands:
 
@@ -25,7 +25,7 @@ Other commands:
 - `npm run build` makes a production build
 - `npm run lint` and `npm run typecheck` check the code
 
-Live traffic is the default. The app asks its own `/api/aircraft` route for the current map view, clamped to a small box, every 15 seconds. Pick "Mock" in the sidebar for the scripted scenario. Anonymous access works with low limits (400 credits a day). To use your own OpenSky OAuth2 client, copy `.env.example` to `.env.local` and set `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`. Never commit that file. Any live failure (rate limit, blocked host, network error) falls back to mock traffic and says so on screen.
+The app asks its own `/api/aircraft` route for the current map view, clamped to a small box, every 15 seconds. The route tries three live feeds in order and uses the first that answers: [adsb.fi](https://adsb.fi), then [adsb.lol](https://adsb.lol), then [OpenSky](https://opensky-network.org). All three work with no key. Optional keys go in `.env.local` (copy `.env.example`): `ADSBLOL_API_KEY` raises the adsb.lol daily limit, and `OPENSKY_CLIENT_ID` with `OPENSKY_CLIENT_SECRET` raises the OpenSky one. Never commit that file.
 
 ## How the check works
 
@@ -67,7 +67,7 @@ aethersky is a public-good starter inspired by that exchange. It is a small, hon
 It is:
 
 - An open-source, MIT-licensed teaching and demo app
-- A live (or mock) traffic map with a simple, documented conflict predictor
+- A live traffic map with a simple, documented conflict predictor
 - A place for contributors to improve the math, the UI, and the data path in the open
 
 It is not:
@@ -79,7 +79,13 @@ It is not:
 
 ## Data and terms
 
-The planned live feed is the [OpenSky Network](https://opensky-network.org/) REST API. OpenSky's [terms of use](https://opensky-network.org/about/terms-of-use) limit free API use to non-profit research and non-profit education. Use by a for-profit or commercial entity needs a written license. Operational use of the REST API in a live product, service, or automated system also needs a written license, including for non-profit entities. Forks that go beyond this demo must read those terms and get a license when required. OpenSky may block some cloud provider IP ranges, so a deployed host may need to fall back to mock traffic.
+Live traffic comes from community ADS-B networks. Each has its own terms, summarized in [docs/data-sources.md](docs/data-sources.md):
+
+- [adsb.fi](https://adsb.fi) open data is for personal, non-commercial use, limited to 1 request per second, and must be credited with a link.
+- [adsb.lol](https://adsb.lol) data is under the Open Database License (ODbL 1.0), with 500 requests a day per IP without a key.
+- [OpenSky](https://opensky-network.org/) is the third choice.
+
+OpenSky's [terms of use](https://opensky-network.org/about/terms-of-use) limit free API use to non-profit research and non-profit education. Use by a for-profit or commercial entity needs a written license. Operational use of the REST API in a live product, service, or automated system also needs a written license, including for non-profit entities. Forks that go beyond this demo must read those terms and get a license when required. OpenSky often does not answer cloud hosts, which is why it is tried last.
 
 If you use OpenSky data, credit the project as required by its terms:
 
@@ -94,9 +100,15 @@ The name "Schafer" is written here without a diacritic only to keep this file in
 - [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md): build brief and kickoff prompt for the first implementation
 - [docs/tech-spec.md](docs/tech-spec.md): stack, data path, conflict math, tests, UI, and acceptance
 - [docs/safety.md](docs/safety.md): safety rules and disclaimer requirements
-- [docs/data-sources.md](docs/data-sources.md): OpenSky, mock data, citations
+- [docs/data-sources.md](docs/data-sources.md): live feeds and their terms, citations
 - [docs/roadmap.md](docs/roadmap.md): first build, then later ideas
 - [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md)
+
+## Credits
+
+- Logo: the plane icon from [Lucide](https://lucide.dev), ISC license. The notice is in [docs/brand/LUCIDE-LICENSE.txt](docs/brand/LUCIDE-LICENSE.txt). It is a shared open-source icon, not a registered or exclusive mark.
+- Map: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, drawn with [Leaflet](https://leafletjs.com).
+- Traffic: [adsb.fi](https://adsb.fi), [adsb.lol](https://adsb.lol), and [The OpenSky Network](https://opensky-network.org).
 
 ## License
 

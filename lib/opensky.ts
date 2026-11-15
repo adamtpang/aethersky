@@ -1,5 +1,10 @@
-import { buildMockFeed } from "./mockTraffic";
-import type { Aircraft, AircraftFeed, BoundingBox } from "./types";
+import {
+  FeedError,
+  REQUEST_TIMEOUT_MS,
+  finiteOrNull as num,
+  type LiveStates,
+} from "./feedError";
+import type { Aircraft, BoundingBox } from "./types";
 import { metersToFt, mpsToFpm, mpsToKt } from "./units";
 
 /**
@@ -12,36 +17,7 @@ const STATES_URL = "https://opensky-network.org/api/states/all";
 const TOKEN_URL =
   "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 
-const CACHE_TTL_MS = 10_000;
 const TOKEN_MARGIN_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 8_000;
-const DEFAULT_RETRY_AFTER_SEC = 60;
-const MAX_CACHE_ENTRIES = 50;
-
-/**
- * Largest bounding box the proxy will forward, in square degrees. Keeps the
- * OpenSky credit cost at 2 or less per request. The client clamps to 25.
- */
-export const MAX_BBOX_AREA_SQ_DEG = 100;
-
-export class OpenSkyError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-    readonly retryAfterSec?: number,
-  ) {
-    super(message);
-    this.name = "OpenSkyError";
-  }
-}
-
-interface LiveStates {
-  timeUnix: number | null;
-  aircraft: Aircraft[];
-}
-
-const num = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 /**
  * Convert one OpenSky state vector to an Aircraft. Units are converted from
@@ -82,12 +58,12 @@ export function mapStateVector(row: unknown): Aircraft | null {
 /** Map a `/states/all` body. Throws on a body that is not the documented shape. */
 export function mapStatesResponse(body: unknown): LiveStates {
   if (typeof body !== "object" || body === null || !("states" in body)) {
-    throw new OpenSkyError("OpenSky returned an unexpected body");
+    throw new FeedError("the feed returned an unexpected body");
   }
   const { time, states } = body as { time?: unknown; states?: unknown };
   // `states` is null when no aircraft are inside the bounding box.
   if (states !== null && !Array.isArray(states)) {
-    throw new OpenSkyError("OpenSky returned an unexpected body");
+    throw new FeedError("the feed returned an unexpected body");
   }
   const aircraft: Aircraft[] = [];
   for (const row of states ?? []) {
@@ -97,27 +73,9 @@ export function mapStatesResponse(body: unknown): LiveStates {
   return { timeUnix: num(time), aircraft };
 }
 
-export function isValidBbox(bbox: BoundingBox): boolean {
-  const { lamin, lomin, lamax, lomax } = bbox;
-  return (
-    [lamin, lomin, lamax, lomax].every(Number.isFinite) &&
-    lamin >= -90 &&
-    lamax <= 90 &&
-    lomin >= -180 &&
-    lomax <= 180 &&
-    lamin < lamax &&
-    lomin < lomax
-  );
-}
-
-export const bboxAreaSqDeg = (bbox: BoundingBox): number =>
-  (bbox.lamax - bbox.lamin) * (bbox.lomax - bbox.lomin);
-
 // In-memory state for this server instance. No database.
 let token: { value: string; expiresAtMs: number } | null = null;
 let warnedPartialCredentials = false;
-let rateLimitedUntilMs = 0;
-const cache = new Map<string, { expiresAtMs: number; data: LiveStates }>();
 
 function readCredentials(): { id: string; secret: string } | null {
   const id = process.env.OPENSKY_CLIENT_ID?.trim();
@@ -150,11 +108,11 @@ async function getToken(): Promise<string | null> {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
-    throw new OpenSkyError("OpenSky token request failed", res.status);
+    throw new FeedError("the token request failed", res.status);
   }
   const body = (await res.json()) as { access_token?: unknown; expires_in?: unknown };
   if (typeof body.access_token !== "string" || !body.access_token) {
-    throw new OpenSkyError("OpenSky token response had no access token");
+    throw new FeedError("the token response had no access token");
   }
   const expiresInSec = num(body.expires_in) ?? 1800;
   token = {
@@ -164,7 +122,11 @@ async function getToken(): Promise<string | null> {
   return token.value;
 }
 
-async function requestStates(bbox: BoundingBox, allowRetry: boolean): Promise<LiveStates> {
+/** Fetch every aircraft inside a bounding box from OpenSky `/states/all`. */
+export async function fetchOpenSky(
+  bbox: BoundingBox,
+  allowRetry = true,
+): Promise<LiveStates> {
   const bearer = await getToken();
   const url = new URL(STATES_URL);
   url.searchParams.set("lamin", String(bbox.lamin));
@@ -180,93 +142,26 @@ async function requestStates(bbox: BoundingBox, allowRetry: boolean): Promise<Li
 
   if (res.status === 429) {
     const header = Number(res.headers.get("X-Rate-Limit-Retry-After-Seconds"));
-    const retryAfterSec =
-      Number.isFinite(header) && header > 0 ? header : DEFAULT_RETRY_AFTER_SEC;
-    throw new OpenSkyError("OpenSky rate limit reached", 429, retryAfterSec);
+    throw new FeedError(
+      "rate limit reached",
+      429,
+      Number.isFinite(header) && header > 0 ? header : undefined,
+    );
   }
   if (res.status === 401 && bearer && allowRetry) {
     // The token may have expired early. Refresh once, never in a loop.
     token = null;
-    return requestStates(bbox, false);
+    return fetchOpenSky(bbox, false);
   }
   if (!res.ok) {
-    throw new OpenSkyError(`OpenSky responded with status ${res.status}`, res.status);
+    throw new FeedError(`responded with status ${res.status}`, res.status);
   }
 
   let body: unknown;
   try {
     body = await res.json();
   } catch {
-    throw new OpenSkyError("OpenSky returned an unexpected body");
+    throw new FeedError("the feed returned an unexpected body");
   }
   return mapStatesResponse(body);
-}
-
-const bboxKey = (bbox: BoundingBox): string =>
-  [bbox.lamin, bbox.lomin, bbox.lamax, bbox.lomax].map((v) => v.toFixed(2)).join(",");
-
-function describeFailure(error: unknown): string {
-  if (error instanceof OpenSkyError) {
-    if (error.status === 429) {
-      return `OpenSky rate limit reached. Retrying live data in about ${Math.ceil(
-        error.retryAfterSec ?? DEFAULT_RETRY_AFTER_SEC,
-      )} s.`;
-    }
-    return `${error.message}.`;
-  }
-  if (error instanceof Error && error.name === "TimeoutError") {
-    return "OpenSky did not respond in time.";
-  }
-  return "Could not reach OpenSky.";
-}
-
-/**
- * Live feed for a bounding box, with a 10 second cache per box. Any failure
- * (rate limit, auth, network, unexpected body) falls back to the mock feed
- * with `warning` set. Never throws.
- */
-export async function getLiveFeed(bbox: BoundingBox): Promise<AircraftFeed> {
-  const nowMs = Date.now();
-  const fetchedAtUnix = Math.floor(nowMs / 1000);
-
-  if (bboxAreaSqDeg(bbox) > MAX_BBOX_AREA_SQ_DEG) {
-    return buildMockFeed(
-      "The requested area is too large for the live feed. Zoom in. Showing mock traffic.",
-    );
-  }
-
-  const key = bboxKey(bbox);
-  const cached = cache.get(key);
-  if (cached && nowMs < cached.expiresAtMs) {
-    return { source: "opensky", fetchedAtUnix, ...cached.data };
-  }
-
-  if (nowMs < rateLimitedUntilMs) {
-    const waitSec = Math.ceil((rateLimitedUntilMs - nowMs) / 1000);
-    return buildMockFeed(
-      `OpenSky rate limit reached. Retrying live data in about ${waitSec} s. Showing mock traffic.`,
-    );
-  }
-
-  try {
-    const data = await requestStates(bbox, true);
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      for (const [k, entry] of cache) {
-        if (entry.expiresAtMs <= nowMs) cache.delete(k);
-      }
-      if (cache.size >= MAX_CACHE_ENTRIES) cache.clear();
-    }
-    cache.set(key, { expiresAtMs: Date.now() + CACHE_TTL_MS, data });
-    return { source: "opensky", fetchedAtUnix, ...data };
-  } catch (error) {
-    if (error instanceof OpenSkyError && error.status === 429) {
-      rateLimitedUntilMs =
-        Date.now() + (error.retryAfterSec ?? DEFAULT_RETRY_AFTER_SEC) * 1000;
-    }
-    const status = error instanceof OpenSkyError ? error.status : undefined;
-    console.warn(
-      `[opensky] live request failed${status ? ` (status ${status})` : ""}, serving mock traffic`,
-    );
-    return buildMockFeed(`${describeFailure(error)} Showing mock traffic.`);
-  }
 }

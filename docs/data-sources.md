@@ -15,7 +15,29 @@ These sources describe the November 13, 2026 FAA ground stop and the November 15
 | Casey Handmer: "You could literally just use ADS-B and per-aircraft conflict avoidance." | November 15, 2026, 12:53 p.m. CT | [x.com/CJHandmer/status/2122040258686767138](https://x.com/CJHandmer/status/2122040258686767138) |
 | Casey Handmer: "I might just build this as a free advisory service." | November 15, 2026, 2:50 p.m. CT | [x.com/CJHandmer/status/2122069804442059078](https://x.com/CJHandmer/status/2122069804442059078) |
 
-## OpenSky Network (planned live feed)
+## Live feeds (real traffic only)
+
+Changed on November 15, 2026: the app shows real traffic or nothing. `GET /api/aircraft` tries these feeds in order and returns the first that answers. If none do, it returns a 503 and the map shows no aircraft. Terms below were read on November 15, 2026. The provider's own page controls.
+
+| Order | Feed | Endpoint | Limit without a key | Terms in short |
+| --- | --- | --- | --- | --- |
+| 1 | [adsb.fi](https://adsb.fi) | `https://opendata.adsb.fi/api/v3/lat/{lat}/lon/{lon}/dist/{nm}` | 1 request per second, radius up to 250 NM | Personal, non-commercial use only. No reselling. Must cite adsb.fi and link its home page. [Terms](https://github.com/adsbfi/opendata) |
+| 2 | [adsb.lol](https://adsb.lol) | `https://api.adsb.lol/v2/point/{lat}/{lon}/{nm}` | 500 requests per day per IP | Open Database License (ODbL 1.0). A free key (`x-api-key`) raises the limit. [API docs](https://www.adsb.lol/docs/open-data/api/) |
+| 3 | [OpenSky](https://opensky-network.org) | `https://opensky-network.org/api/states/all` | 400 credits per day | Non-profit research and education. See below. |
+
+Notes:
+
+- Both community feeds use the readsb JSON format and already report feet, knots, and feet per minute.
+- The route caches each box for 10 seconds, waits at least 1.1 seconds between adsb.fi requests, and leaves a feed alone for 20 seconds after a failure (or for the time a 429 asks for).
+- A deployed site sends every visitor's request from the server's address, so the per-IP limits are shared by all visitors. adsb.fi is first because it has no daily cap.
+- Positions older than 60 seconds are dropped (a teaching default), because the engine projects each aircraft forward at constant velocity.
+- adsb.fi's terms say personal, non-commercial use. This repository is a free public demo with no revenue. A fork that sells anything, or runs at a higher request rate, must contact adsb.fi first.
+- Optional env var: `ADSBLOL_API_KEY`. Server only. Never commit it.
+- Show the credit for whichever feed is on screen, with a link, in the app footer.
+
+Tried and not used: airplanes.live answered 403 on November 15, 2026 and now asks projects to email for access.
+
+## OpenSky Network (third choice)
 
 - REST root: `https://opensky-network.org/api`
 - Endpoint for this app: `GET /states/all` with a bounding box (`lamin`, `lomin`, `lamax`, `lomax`)
@@ -44,7 +66,7 @@ Do not commit credentials. `.env.example` must not contain real values.
 - `/states/all` credit cost depends on bounding-box area (latitude range times longitude range, in square degrees): 1 credit if area is at most 25 sq degrees (or a serial-only query), 2 if 25-100, 3 if 100-400, 4 if larger or global.
 - A 429 response includes `X-Rate-Limit-Retry-After-Seconds`. Back off. Do not tight-loop.
 - Cache successful responses for about 10 seconds (anonymous resolution is already 10 seconds; faster polling wastes credits).
-- OpenSky has said it may block AWS and other hyperscaler IPs because of abuse. A Vercel deployment may therefore fail even with valid credentials. Always keep the mock fallback.
+- OpenSky has said it may block AWS and other hyperscaler IPs because of abuse. On November 15, 2026 it did not answer requests from the Vercel deployment at all, which is why it is tried last.
 
 ### Terms in short (read the official page; it controls)
 
@@ -63,11 +85,11 @@ From the terms, cite:
 
 The published paper spells the first author's name with a diacritic. Keep the official paper title in citations when you can.
 
-Show OpenSky credit in the app footer when the live source is selected, and keep OSM tile attribution on the map.
+Show OpenSky credit in the app footer when OpenSky is the feed on screen, and keep OSM tile attribution on the map.
 
-## Mock traffic
+## Test scene
 
-Deterministic, in-repo, no network. Used as the default when live data is off, when OpenSky errors, or when credits are exhausted. Must set `source: "mock"` and trigger a MOCK DATA banner. The scenario is specified in [tech-spec.md](tech-spec.md). It is invented geometry for tests, not a recording of real flights.
+`lib/conflict/scene.fixture.ts` holds scripted aircraft for the test suite only. It is invented geometry, not a recording of real flights, and the app never shows it.
 
 ## Map tiles
 

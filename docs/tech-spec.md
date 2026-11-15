@@ -6,6 +6,8 @@ This is the technical contract for the first build. It goes with [HANDOFF-fable.
 
 Demo default thresholds (not regulatory): 5 nautical miles lateral, 1000 feet vertical, 120 seconds lookahead.
 
+> **Amendment, November 15, 2026 (maintainer decision): real traffic only.** Sections 8, 9, and 11 below describe the first build, which fell back to mock traffic. That is no longer how the app works. The app now tries adsb.fi, then adsb.lol, then OpenSky, and shows no aircraft with a LIVE DATA UNAVAILABLE banner when none answer. There is no mock source, no source toggle, and no MOCK DATA banner. The scripted scene lives on only as a test fixture in `lib/conflict/scene.fixture.ts`. The current contract is in [data-sources.md](data-sources.md) and [safety.md](safety.md). Sections 3 through 7 and the fixtures in section 10 are unchanged. Section 7 is also amended: the grid searches two cells out, not one, so a fast head-on pair is never dropped.
+
 ## 1. Stack
 
 - Next.js App Router, TypeScript, Tailwind CSS

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { detectConflicts, pairKey } from "@/lib/conflict";
 import { DEFAULT_BBOX, clampBbox, type ViewBounds } from "@/lib/geo";
-import { MOCK_ORIGIN, buildMockFeed } from "@/lib/mockTraffic";
 import {
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
@@ -18,8 +17,8 @@ import {
   type DisplayFilters,
 } from "./Filters";
 import type { MapFocus } from "./MapView";
-import MockBanner from "./MockBanner";
-import Sidebar, { type SourceChoice } from "./Sidebar";
+import FeedBanner from "./FeedBanner";
+import Sidebar from "./Sidebar";
 
 // Leaflet needs the browser, so the map is loaded on the client only.
 const MapView = dynamic(() => import("./MapView"), {
@@ -63,11 +62,10 @@ function matchesFilters(ac: Aircraft, filters: DisplayFilters): boolean {
 }
 
 export default function AppShell() {
-  // Live is the default. Any live failure falls back to mock traffic with a
-  // MOCK DATA banner. The free OpenSky API is for non-profit research and
-  // education and has a small daily credit quota. See docs/data-sources.md.
-  const [sourceChoice, setSourceChoice] = useState<SourceChoice>("live");
+  // Real traffic only. When no live feed answers, the map shows no aircraft
+  // and says so. Simulated traffic is never substituted.
   const [feed, setFeed] = useState<AircraftFeed | null>(null);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [thresholds, setThresholds] = useState<ConflictThresholds>(
     DEMO_DEFAULT_THRESHOLDS,
@@ -80,49 +78,46 @@ export default function AppShell() {
   const bboxRef = useRef<BoundingBox>(DEFAULT_BBOX);
   const requestSeq = useRef(0);
 
-  const load = useCallback(async (choice: SourceChoice) => {
+  const load = useCallback(async () => {
     const seq = ++requestSeq.current;
-    const params = new URLSearchParams({ source: choice });
-    if (choice === "live") {
-      const bbox = bboxRef.current;
-      params.set("lamin", bbox.lamin.toFixed(2));
-      params.set("lomin", bbox.lomin.toFixed(2));
-      params.set("lamax", bbox.lamax.toFixed(2));
-      params.set("lomax", bbox.lomax.toFixed(2));
-    }
-    let next: AircraftFeed;
+    const bbox = bboxRef.current;
+    const params = new URLSearchParams({
+      lamin: bbox.lamin.toFixed(2),
+      lomin: bbox.lomin.toFixed(2),
+      lamax: bbox.lamax.toFixed(2),
+      lomax: bbox.lomax.toFixed(2),
+    });
+    let next: AircraftFeed | null = null;
+    let error: string | null = null;
     try {
       const res = await fetch(`/api/aircraft?${params.toString()}`, {
         cache: "no-store",
       });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = (await res.json()) as AircraftFeed;
-      if (!data || !Array.isArray(data.aircraft)) {
-        throw new Error("unexpected response");
+      const data = (await res.json()) as Partial<AircraftFeed> & { error?: string };
+      if (res.ok && data && Array.isArray(data.aircraft)) {
+        next = data as AircraftFeed;
+      } else {
+        error = data?.error ?? `The aircraft service answered with status ${res.status}.`;
       }
-      next = data;
     } catch {
-      // Never leave a blank, official-looking map. Use the in-browser mock.
-      next = buildMockFeed(
-        "The aircraft service could not be reached. Showing mock traffic.",
-      );
+      error = "The aircraft service could not be reached.";
     }
     if (seq !== requestSeq.current) return;
+    // On failure the old picture is dropped. Stale traffic is not shown.
     setFeed(next);
+    setFeedError(error);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    void load(sourceChoice);
-    if (sourceChoice !== "live") return;
+    void load();
     const timer = setInterval(() => {
-      if (!document.hidden) void load("live");
+      if (!document.hidden) void load();
     }, LIVE_POLL_MS);
     return () => clearInterval(timer);
-  }, [sourceChoice, load]);
+  }, [load]);
 
   const aircraft = feed?.aircraft ?? NO_AIRCRAFT;
-  const isMock = feed?.source === "mock";
 
   const byId = useMemo(
     () => new Map(aircraft.map((ac) => [ac.icao24, ac])),
@@ -132,10 +127,8 @@ export default function AppShell() {
   // Conflicts are always checked across all traffic, never the filtered view.
   const conflicts = useMemo(
     () =>
-      detectConflicts(aircraft, thresholds, {
-        origin: isMock ? MOCK_ORIGIN : undefined,
-      }),
-    [aircraft, thresholds, isMock],
+      detectConflicts(aircraft, thresholds),
+    [aircraft, thresholds],
   );
 
   const conflictIds = useMemo(() => {
@@ -170,21 +163,10 @@ export default function AppShell() {
     [visibleAircraft, selected],
   );
 
-  const handleSourceChange = useCallback(
-    (choice: SourceChoice) => {
-      if (choice === sourceChoice) return;
-      setLoading(true);
-      setSelectedId(null);
-      setSelectedPair(null);
-      setSourceChoice(choice);
-    },
-    [sourceChoice],
-  );
-
   const handleRefresh = useCallback(() => {
     setLoading(true);
-    void load(sourceChoice);
-  }, [load, sourceChoice]);
+    void load();
+  }, [load]);
 
   const handleSelectAircraft = useCallback((icao24: string) => {
     setSelectedId(icao24);
@@ -238,7 +220,7 @@ export default function AppShell() {
 
   return (
     <>
-      {isMock ? <MockBanner warning={feed?.warning} /> : null}
+      {feedError ? <FeedBanner message={feedError} /> : null}
       <main className="grid min-h-0 flex-1 grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-1">
         <div className="relative min-h-0 bg-bg">
           <MapView
@@ -254,20 +236,23 @@ export default function AppShell() {
             onClearSelection={handleClearSelection}
             onBoundsChange={handleBoundsChange}
           />
-          {!feed ? (
-            <MapNotice>Loading traffic</MapNotice>
+          {feedError ? (
+            <MapNotice>
+              Live traffic is unavailable, so no aircraft are shown. Retrying
+              automatically.
+            </MapNotice>
+          ) : !feed ? (
+            <MapNotice>Loading live traffic</MapNotice>
           ) : aircraft.length === 0 ? (
             <MapNotice>
-              No aircraft reported in this area. Pan or zoom the map, or switch
-              to mock traffic.
+              No aircraft reported in this area right now. Pan or zoom the map.
             </MapNotice>
           ) : null}
         </div>
         <Sidebar
           feed={feed}
+          feedError={feedError}
           loading={loading}
-          sourceChoice={sourceChoice}
-          onSourceChange={handleSourceChange}
           onRefresh={handleRefresh}
           conflicts={conflicts}
           byId={byId}

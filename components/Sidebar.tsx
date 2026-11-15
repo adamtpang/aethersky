@@ -17,16 +17,15 @@ import type {
   AircraftFeed,
   ConflictPair,
   ConflictThresholds,
+  FeedSource,
 } from "@/lib/types";
 import Filters, { type DisplayFilters } from "./Filters";
-
-export type SourceChoice = "mock" | "live";
+import Logo from "./Logo";
 
 interface SidebarProps {
   feed: AircraftFeed | null;
+  feedError: string | null;
   loading: boolean;
-  sourceChoice: SourceChoice;
-  onSourceChange: (choice: SourceChoice) => void;
   onRefresh: () => void;
   conflicts: ConflictPair[];
   byId: ReadonlyMap<string, Aircraft>;
@@ -45,10 +44,23 @@ interface SidebarProps {
 
 const LIST_LIMIT = 150;
 
-const SOURCE_OPTIONS: { value: SourceChoice; label: string }[] = [
-  { value: "mock", label: "Mock" },
-  { value: "live", label: "Live (OpenSky)" },
-];
+const SOURCES: Record<FeedSource, { name: string; href: string; note: string }> = {
+  "adsb.fi": {
+    name: "adsb.fi",
+    href: "https://adsb.fi",
+    note: "Community ADS-B network. Open data for personal, non-commercial use.",
+  },
+  "adsb.lol": {
+    name: "adsb.lol",
+    href: "https://adsb.lol",
+    note: "Community ADS-B network. Data under the Open Database License.",
+  },
+  opensky: {
+    name: "The OpenSky Network",
+    href: "https://opensky-network.org",
+    note: "Research ADS-B network. Free API for non-profit research and education.",
+  },
+};
 
 function Section({
   title,
@@ -81,9 +93,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 export default function Sidebar({
   feed,
+  feedError,
   loading,
-  sourceChoice,
-  onSourceChange,
   onRefresh,
   conflicts,
   byId,
@@ -103,13 +114,30 @@ export default function Sidebar({
   const selectedConflicts = selected
     ? conflicts.filter((c) => c.a === selected.icao24 || c.b === selected.icao24)
     : [];
-  const fellBack = sourceChoice === "live" && feed?.source === "mock";
+  const source = feed ? SOURCES[feed.source] : null;
 
   return (
     <aside
       aria-label="Traffic details and controls"
       className="flex min-h-0 flex-col overflow-y-auto border-line bg-panel text-[13px] lg:border-l"
     >
+      <header className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+        <Logo size={30} />
+        <div className="leading-tight">
+          <p className="text-[15px] font-semibold tracking-tight">aethersky</p>
+          <p className="text-[11px] text-muted">
+            Open-source advisory traffic demo
+          </p>
+        </div>
+        <a
+          href="https://github.com/adamtpang/aethersky"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto rounded border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
+        >
+          GitHub
+        </a>
+      </header>
       <Section
         title="Data source"
         aside={
@@ -123,49 +151,37 @@ export default function Sidebar({
           </button>
         }
       >
-        <div
-          role="radiogroup"
-          aria-label="Data source"
-          className="grid grid-cols-2 gap-1 rounded-md border border-line bg-bg p-1"
-        >
-          {SOURCE_OPTIONS.map((option) => {
-            const active = sourceChoice === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => onSourceChange(option.value)}
-                className={`rounded px-2 py-1.5 text-[13px] font-medium ${
-                  active
-                    ? "bg-accent text-bg"
-                    : "text-muted hover:bg-raised hover:text-fg"
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-2 font-mono text-xs text-muted" aria-live="polite">
-          {feed
-            ? `${feed.source === "mock" ? "MOCK" : "OpenSky"} · ${totalAircraft} aircraft · updated ${fmtClock(feed.fetchedAtUnix)}`
-            : "Loading traffic"}
+        <p className="font-mono text-xs" aria-live="polite">
+          {feed && source ? (
+            <>
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#4ade80]" aria-hidden="true" />
+              <span className="text-fg">Live</span>
+              <span className="text-muted">
+                {` \u00b7 ${source.name} \u00b7 ${totalAircraft} aircraft \u00b7 updated ${fmtClock(feed.fetchedAtUnix)}`}
+              </span>
+            </>
+          ) : feedError ? (
+            <span className="text-danger">Unavailable. No aircraft shown.</span>
+          ) : (
+            <span className="text-muted">Loading live traffic</span>
+          )}
         </p>
-        {fellBack ? (
+        {feedError ? (
           <p
             role="alert"
             className="mt-2 rounded border border-danger/50 bg-danger/10 px-2 py-1.5 text-xs leading-snug text-[#ffc2bc]"
           >
-            Live data is unavailable, so mock traffic is shown instead.
-            {feed?.warning ? ` ${feed.warning}` : ""}
+            {feedError} Retrying automatically.
+          </p>
+        ) : null}
+        {feed?.warning ? (
+          <p className="mt-2 rounded border border-line bg-bg px-2 py-1.5 text-xs leading-snug text-muted">
+            {feed.warning}
           </p>
         ) : null}
         <p className="mt-2 text-[11px] leading-snug text-muted">
-          {DATA_CAVEAT_TEXT} Live mode uses the free OpenSky Network API, which
-          is for non-profit research and education, and falls back to mock
-          traffic on any error.
+          {DATA_CAVEAT_TEXT} Real traffic only: if no live feed answers, the
+          map shows nothing instead of simulated aircraft.
         </p>
       </Section>
 
@@ -385,23 +401,24 @@ export default function Sidebar({
           </a>{" "}
           contributors.
         </p>
-        {sourceChoice === "live" || feed?.source === "opensky" ? (
+        {source ? (
           <p className="mt-1">
             Live traffic data:{" "}
             <a
               className="text-accent hover:underline"
-              href="https://opensky-network.org"
+              href={source.href}
               target="_blank"
               rel="noreferrer"
             >
-              The OpenSky Network
+              {source.name}
             </a>
-            . This demo is not an OpenSky product and is not endorsed by OpenSky.
+            . {source.note} This demo is not a product of, and is not endorsed
+            by, any data provider.
           </p>
         ) : null}
         <p className="mt-1">
           aethersky is an open-source teaching demo. Thresholds are demo
-          defaults, not FAA, ICAO, or TCAS minima.
+          defaults, not FAA, ICAO, or TCAS minima. Logo icon from Lucide.
         </p>
       </footer>
     </aside>

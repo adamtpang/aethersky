@@ -8,10 +8,10 @@ The repository is a placeholder plus this spec. The first implementation is the 
 
 ## First shippable app (this pass)
 
-- Live or mock traffic on a Leaflet OSM map
+- Live traffic on a Leaflet OSM map
 - Conflict engine with tests
-- Sidebar, filters, disclaimer bar, MOCK DATA banner
-- OpenSky proxy with cache, optional OAuth, and a safe fallback
+- Sidebar, filters, disclaimer bar, LIVE DATA UNAVAILABLE banner
+- Live feed chain (adsb.fi, adsb.lol, OpenSky) with a cache and an honest unavailable state
 
 ## Pending follow-ups from the first build
 
@@ -20,12 +20,15 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Review and merge the MVP pull request. Merged on November 15, 2026 at Adam's request. Nothing is deployed yet.
 - [ ] First production deploy. Git-triggered Vercel builds are now skipped for this project (Ignored Build Step is `exit 0`), so deploy by hand with `vercel deploy --prod` from this folder once the pull request is merged. To let `main` build on its own instead, change the Ignored Build Step in Vercel under Settings, Git.
 - [ ] Confirm the first deploy builds as Next.js. The Framework Preset was changed from the static placeholder to Next.js after a preview build failed with "No Output Directory named public". That failed build published nothing.
-- [ ] Check whether OpenSky answers from Vercel. OpenSky may block cloud hosts, in which case live mode falls back to mock traffic on the deployed site.
+- [x] Check whether OpenSky answers from Vercel. It does not (timed out on November 15, 2026), so it is now the third choice.
+- [ ] Check that adsb.fi and adsb.lol answer from Vercel after the next deploy. They answered from a home connection. If neither answers from Vercel, the deployed site will show LIVE DATA UNAVAILABLE.
+- [ ] Get a free adsb.lol key and set `ADSBLOL_API_KEY` in Vercel, so the backup feed has more than 500 requests a day.
+- [ ] Check with adsb.fi that this use is fine. Its open data terms say personal, non-commercial use.
 - [ ] Decide on the grid prefilter change. The engine searches two cells out instead of the eight touching cells in the tech spec, because a fast head-on pair can start two cells apart and would otherwise be dropped. Either accept it and update section 7 of the tech spec, or pick a different fix.
 - [ ] Delete `index.html`, the old placeholder page. It is unused. A workspace safety hook blocked removing it during the build.
-- [x] Decide the default data source. Adam chose live on November 15, 2026. Mock is the fallback and a sidebar option.
-- [ ] Ask OpenSky about a license (contact@opensky-network.org). Their free terms cover non-profit research and education, and operational use in a live public service needs written permission. Live is now the default, so this matters before the site gets real traffic.
-- [ ] Watch the anonymous OpenSky quota (400 credits a day). With live as the default, a few visitors can use it up, after which everyone sees mock traffic until it refills.
+- [x] Decide the data source. Adam chose real traffic only on November 15, 2026. Mock is removed from the app and kept only as a test fixture. Feeds are adsb.fi, then adsb.lol, then OpenSky.
+- [ ] Ask OpenSky about a license (contact@opensky-network.org) if OpenSky ever becomes a main feed again. It is now only the third choice.
+- [ ] Watch feed limits once the site has visitors. All visitors share the server address, so adsb.fi (1 request a second) and adsb.lol (500 a day) limits are shared too.
 - [ ] Decide whether to check vertical separation across the whole lookahead window. Today it is checked only at the moment of closest horizontal approach, as the tech spec defines it, so a pair inside both thresholds at some other moment is not flagged.
 - [ ] Wire in PostHog with `tools/analytics/posthog-rollout.mjs` and add the site to `fleet.json`. This was outside the first brief.
 - [ ] Reduce label overlap when aircraft are close together at low zoom.
