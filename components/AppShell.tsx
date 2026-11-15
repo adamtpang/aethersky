@@ -63,9 +63,10 @@ function matchesFilters(ac: Aircraft, filters: DisplayFilters): boolean {
 }
 
 export default function AppShell() {
-  // Mock is the default. Live is opt-in because the free OpenSky API is for
-  // non-profit research and education and has a small daily credit quota.
-  const [sourceChoice, setSourceChoice] = useState<SourceChoice>("mock");
+  // Live is the default. Any live failure falls back to mock traffic with a
+  // MOCK DATA banner. The free OpenSky API is for non-profit research and
+  // education and has a small daily credit quota. See docs/data-sources.md.
+  const [sourceChoice, setSourceChoice] = useState<SourceChoice>("live");
   const [feed, setFeed] = useState<AircraftFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [thresholds, setThresholds] = useState<ConflictThresholds>(
