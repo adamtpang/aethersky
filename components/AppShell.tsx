@@ -28,10 +28,12 @@ const MapView = dynamic(() => import("./MapView"), {
   loading: () => <MapNotice>Loading map</MapNotice>,
 });
 
+const NO_GHOSTS: Aircraft[] = [];
+
 function MapNotice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-3">
-      <p className="rounded-md border border-line bg-panel/95 px-3 py-1.5 text-[13px] text-fg shadow-lg">
+    <div className="pointer-events-none absolute inset-x-0 top-14 z-[1000] flex justify-center px-3">
+      <p className="max-w-xl border border-line bg-panel/95 px-3 py-1.5 text-center text-[13px] leading-snug text-fg shadow-lg">
         {children}
       </p>
     </div>
@@ -135,6 +137,19 @@ export default function AppShell() {
     [byId, thresholds, checkedAircraft, flaggedKeys],
   );
 
+  // The earlier picture, minus every aircraft that live traffic has already
+  // replaced. Hidden in the conflicts-only view: it is never checked.
+  const ghosts = useMemo(
+    () =>
+      traffic.earlier && !conflictsOnly
+        ? traffic.earlier.aircraft.filter((ac) => !byId.has(ac.icao24))
+        : NO_GHOSTS,
+    [traffic.earlier, byId, conflictsOnly],
+  );
+  const earlierMinutes = traffic.earlier
+    ? Math.max(1, Math.round(traffic.earlier.ageSec / 60))
+    : 0;
+
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
   const selectedPairKey =
     selectedPair && conflicts.some((c) => pairKey(c) === selectedPair)
@@ -205,6 +220,7 @@ export default function AppShell() {
         <div className="relative min-h-0 bg-bg">
           <MapView
             aircraft={mapAircraft}
+            ghosts={ghosts}
             byId={byId}
             conflicts={conflicts}
             conflictIds={conflictIds}
@@ -262,6 +278,9 @@ export default function AppShell() {
               {traffic.regionsTotal > 0
                 ? `Loading live traffic: ${traffic.regionsDone} of ${traffic.regionsTotal} regions`
                 : "Loading live traffic"}
+              {traffic.earlier
+                ? `. Faint dots are an earlier picture from about ${earlierMinutes} min ago.`
+                : ""}
             </MapNotice>
           ) : aircraft.length === 0 ? (
             <MapNotice>

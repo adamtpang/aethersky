@@ -18,6 +18,11 @@ import type { Aircraft, ConflictPair } from "@/lib/types";
 
 interface TrafficCanvasProps {
   aircraft: Aircraft[];
+  /**
+   * An earlier picture, drawn as faint dots while live traffic loads. Not
+   * selectable, never flagged, no track lines, no data blocks.
+   */
+  ghosts: Aircraft[];
   byId: ReadonlyMap<string, Aircraft>;
   conflicts: ConflictPair[];
   conflictIds: ReadonlySet<string>;
@@ -174,6 +179,7 @@ function shortTag(ac: Aircraft): string {
  */
 export default function TrafficCanvas({
   aircraft,
+  ghosts,
   byId,
   conflicts,
   conflictIds,
@@ -241,6 +247,12 @@ export default function TrafficCanvas({
     const ys = new Float64Array(n);
     const flagged = new Uint8Array(n);
     const indexOf = new Map<string, number>();
+    const ghostXs = new Float64Array(ghosts.length);
+    const ghostYs = new Float64Array(ghosts.length);
+    for (let i = 0; i < ghosts.length; i++) {
+      ghostXs[i] = mercX(ghosts[i].longitude);
+      ghostYs[i] = mercY(ghosts[i].latitude);
+    }
     for (let i = 0; i < n; i++) {
       const ac = aircraft[i];
       xs[i] = mercX(ac.longitude);
@@ -284,6 +296,18 @@ export default function TrafficCanvas({
         x > -pad && x < w + pad && y > -pad && y < h + pad;
       const stamp = (sp: Sprite, x: number, y: number) =>
         ctx.drawImage(sp.image, x - sp.side / 2, y - sp.side / 2, sp.side, sp.side);
+
+      // The earlier picture goes down first, faint, so live traffic sits on it.
+      if (ghostXs.length > 0) {
+        const faint = sprite("dot", Math.max(1.5, Math.min(s, 2.5)), TRAFFIC, dpr);
+        ctx.globalAlpha = 0.28;
+        for (let i = 0; i < ghostXs.length; i++) {
+          const x = ghostXs[i] * scale - ox;
+          const y = ghostYs[i] * scale - oy;
+          if (visible(x, y)) stamp(faint, x, y);
+        }
+        ctx.globalAlpha = 1;
+      }
 
       // Velocity vectors: where each aircraft will be in 60 seconds.
       if (zoom >= 7) {
@@ -453,7 +477,7 @@ export default function TrafficCanvas({
       perfStats.drawMs = performance.now() - drawStartedAt;
     };
     drawRef.current();
-  }, [map, aircraft, byId, conflicts, conflictIds, selectedId, selectedPairKey]);
+  }, [map, aircraft, ghosts, byId, conflicts, conflictIds, selectedId, selectedPairKey]);
 
   // A click selects the nearest aircraft, or clears the selection.
   useEffect(() => {

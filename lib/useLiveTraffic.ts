@@ -11,7 +11,7 @@ import type {
   ConflictThresholds,
   FeedSource,
 } from "./types";
-import type { SweepEvent, WireRow } from "./wire";
+import { decodeSighting, type SweepEvent, type TrafficSnapshot, type WireRow } from "./wire";
 
 /**
  * How often the page asks for the national sweep. The server refreshes it
@@ -20,6 +20,11 @@ import type { SweepEvent, WireRow } from "./wire";
 const POLL_MS = 45_000;
 /** How often positions are moved forward along their tracks. */
 const TICK_MS = 5_000;
+/**
+ * An earlier picture older than this is not shown at all. It is only ever a
+ * placeholder for the few seconds before live traffic arrives.
+ */
+export const EARLIER_MAX_AGE_SEC = 600;
 /** While regions are streaming in, redraw at most this often. */
 const STREAM_REDRAW_MS = 350;
 
@@ -39,6 +44,12 @@ export interface LiveTraffic {
   sweptAtUnix: number | null;
   /** True while a sweep is being read. */
   refreshing: boolean;
+  /**
+   * The last finished sweep, shown dimmed while the first live sweep loads.
+   * Positions are as last seen, not projected. Never used for conflict
+   * checks. Null once live traffic has fully arrived, or if it is too old.
+   */
+  earlier: { aircraft: Aircraft[]; ageSec: number } | null;
   /** Time of the last conflict check, milliseconds, and how many aircraft. */
   detectMs: number;
   checked: number;
@@ -83,6 +94,10 @@ export function useLiveTraffic(
   const [conflicts, setConflicts] = useState<ConflictPair[]>([]);
   const [meta, setMeta] = useState<Meta>(INITIAL_META);
   const [timing, setTiming] = useState({ detectMs: 0, checked: 0 });
+  const [earlier, setEarlier] = useState<LiveTraffic["earlier"]>(null);
+  /** The earlier picture as received, and whether it is still wanted. */
+  const earlierRef = useRef<{ aircraft: Aircraft[]; finishedAtUnix: number } | null>(null);
+  const firstSweepDoneRef = useRef(false);
 
   const sightingsRef = useRef(new Map<string, WireRow>());
   /** Server clock minus this device's clock, seconds. */
@@ -120,6 +135,24 @@ export function useLiveTraffic(
     setAircraft(next);
   }, []);
 
+  /** Work out the earlier picture's age, and drop it once it is too old. */
+  const refreshEarlier = useCallback(() => {
+    const held = earlierRef.current;
+    if (!held || firstSweepDoneRef.current) {
+      earlierRef.current = null;
+      setEarlier(null);
+      return;
+    }
+    const nowUnix = Date.now() / 1000 + clockOffsetRef.current;
+    const ageSec = Math.max(0, Math.round(nowUnix - held.finishedAtUnix));
+    if (ageSec > EARLIER_MAX_AGE_SEC) {
+      earlierRef.current = null;
+      setEarlier(null);
+      return;
+    }
+    setEarlier({ aircraft: held.aircraft, ageSec });
+  }, []);
+
   const scheduleRebuild = useCallback(() => {
     if (redrawTimerRef.current !== null) return;
     redrawTimerRef.current = setTimeout(() => {
@@ -136,6 +169,7 @@ export function useLiveTraffic(
         clockOffsetRef.current =
           event.nowUnix + responseAgeRef.current - Date.now() / 1000;
         clockKnownRef.current = true;
+        refreshEarlier();
       } else if (event.t === "start") {
         setMeta((m) => ({
           ...m,
@@ -153,6 +187,10 @@ export function useLiveTraffic(
         setMeta((m) => ({ ...m, regionsDone: event.done }));
         scheduleRebuild();
       } else {
+        // Live traffic has spoken. The placeholder is no longer needed,
+        // and after a failure it must not stay on screen either.
+        firstSweepDoneRef.current = true;
+        refreshEarlier();
         if (event.error) {
           sightingsRef.current.clear();
           setMeta((m) => ({
@@ -177,7 +215,7 @@ export function useLiveTraffic(
         rebuild();
       }
     },
-    [rebuild, scheduleRebuild],
+    [rebuild, scheduleRebuild, refreshEarlier],
   );
 
   const load = useCallback(async () => {
@@ -214,6 +252,8 @@ export function useLiveTraffic(
       }
       if (!ended) throw new Error("The traffic stream stopped before it finished.");
     } catch (error) {
+      firstSweepDoneRef.current = true;
+      refreshEarlier();
       sightingsRef.current.clear();
       setMeta((m) => ({
         ...m,
@@ -229,7 +269,32 @@ export function useLiveTraffic(
     } finally {
       loadingRef.current = false;
     }
-  }, [handleEvent, rebuild]);
+  }, [handleEvent, rebuild, refreshEarlier]);
+
+  // Once, on arrival: ask for the last finished sweep. The CDN usually has
+  // a copy and answers at once, so a cold visit is not an empty map.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/traffic?snapshot=1");
+        if (!res.ok) return;
+        const snapshot = (await res.json()) as TrafficSnapshot;
+        if (cancelled || firstSweepDoneRef.current) return;
+        if (!Array.isArray(snapshot.rows) || !snapshot.finishedAtUnix) return;
+        earlierRef.current = {
+          aircraft: snapshot.rows.map(decodeSighting),
+          finishedAtUnix: snapshot.finishedAtUnix,
+        };
+        refreshEarlier();
+      } catch {
+        // No earlier picture. The live sweep carries on as usual.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshEarlier]);
 
   // Read a sweep now, then on a timer while the tab is visible. A tab that
   // comes back from the background refreshes at once, because everything it
@@ -256,6 +321,7 @@ export function useLiveTraffic(
     const timer = setInterval(() => {
       if (document.hidden) return;
       rebuild();
+      if (earlierRef.current) refreshEarlier();
       // Everything expired and nothing is on its way: ask again now.
       if (
         sightingsRef.current.size === 0 &&
@@ -269,7 +335,7 @@ export function useLiveTraffic(
       clearInterval(timer);
       if (redrawTimerRef.current !== null) clearTimeout(redrawTimerRef.current);
     };
-  }, [rebuild, load]);
+  }, [rebuild, load, refreshEarlier]);
 
   // The conflict check runs in a worker. If a worker cannot start, it runs here.
   useEffect(() => {
@@ -329,6 +395,7 @@ export function useLiveTraffic(
     conflicts,
     ...meta,
     ...timing,
+    earlier,
     refresh: load,
   };
 }

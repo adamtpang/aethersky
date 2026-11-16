@@ -48,6 +48,18 @@ On the national map every position is an estimate: the last reported position mo
 
 The About page (`/about`, linked from the nav bar on every page) must keep saying plainly that this site would not have prevented the November 13, 2026 ground stop. Nothing may open over the map by itself on arrival, and nothing may ever cover the disclaimer bar.
 
+### The earlier picture
+
+A full pass over the country takes about 30 seconds, so a visitor who arrives when nobody else has been on the site would see a nearly empty map. To avoid that, the page may show the last finished sweep while the first live sweep loads. This is real traffic, only older, and it has hard limits:
+
+- It is drawn as faint dots, visibly different from live aircraft.
+- The loading notice says it is an earlier picture and how many minutes old it is.
+- It is never used for conflict checks, never flagged, and cannot be selected.
+- Positions are as last seen. They are not projected forward.
+- It is not shown at all if it is more than 10 minutes old.
+- It is removed the moment the first live sweep finishes, and also if that sweep fails. After a failure the map shows nothing, as before.
+- It is hidden in the "Conflicts only" view.
+
 Scripted aircraft exist only in the test suite (`lib/conflict/scene.fixture.ts`) to exercise the engine.
 
 ## Data terms

@@ -63,6 +63,17 @@ export type SweepEvent =
       error?: string;
     };
 
+/**
+ * The last finished sweep, as one object. The page shows it dimmed for the
+ * few seconds before live traffic arrives, so a cold visit is not an empty
+ * map. It is never used for conflict checks.
+ */
+export interface TrafficSnapshot {
+  /** Server clock when that sweep finished, unix seconds. */
+  finishedAtUnix: number;
+  rows: WireRow[];
+}
+
 const round = (value: number | null, digits = 0): number | null => {
   if (value === null || !Number.isFinite(value)) return null;
   const f = 10 ** digits;
