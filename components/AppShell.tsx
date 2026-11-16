@@ -30,12 +30,36 @@ const MapView = dynamic(() => import("./MapView"), {
 
 const NO_GHOSTS: Aircraft[] = [];
 
-function MapNotice({ children }: { children: React.ReactNode }) {
+function MapNotice({
+  children,
+  progress,
+}: {
+  children: React.ReactNode;
+  /** Share of the first sweep that has arrived, 0 to 1. Draws a bar. */
+  progress?: number;
+}) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-14 z-[1000] flex justify-center px-3">
-      <p className="max-w-xl border border-line bg-panel/95 px-3 py-1.5 text-center text-[13px] leading-snug text-fg shadow-lg">
-        {children}
-      </p>
+      <div className="max-w-xl border border-line bg-panel/95 shadow-lg">
+        <p className="px-3 py-1.5 text-center text-[13px] leading-snug text-fg">
+          {children}
+        </p>
+        {progress !== undefined ? (
+          <div
+            role="progressbar"
+            aria-label="Live traffic loaded"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress * 100)}
+            className="h-1.5 w-full bg-raised"
+          >
+            <div
+              className="h-full bg-accent"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -274,9 +298,15 @@ export default function AppShell() {
               automatically.
             </MapNotice>
           ) : firstLoad ? (
-            <MapNotice>
+            <MapNotice
+              progress={
+                traffic.regionsTotal > 0
+                  ? traffic.regionsDone / traffic.regionsTotal
+                  : 0
+              }
+            >
               {traffic.regionsTotal > 0
-                ? `Loading live traffic: ${traffic.regionsDone} of ${traffic.regionsTotal} regions`
+                ? `Loading live traffic: ${traffic.regionsDone} of ${traffic.regionsTotal} regions, about ${Math.max(1, Math.round((traffic.regionsTotal - traffic.regionsDone) * 1.1))} s left`
                 : "Loading live traffic"}
               {traffic.earlier
                 ? `. Faint dots are an earlier picture from about ${earlierMinutes} min ago.`
