@@ -24,7 +24,7 @@ When an aircraft in a flagged pair is selected, the app shows one small change t
 - It must never be worded as a command to a pilot, and never sent, spoken, or pushed anywhere.
 - It knows nothing about terrain, weather, airspace, aircraft performance, or what a controller has already said.
 - It only tries a short fixed list of changes, with demo values (1,500 fpm, 20 and 45 degree turns, 10 percent slower).
-- It checks the whole lookahead window against nearby traffic, which is stricter than the detection check, so it will sometimes say that no small change is enough. That is a true answer, not a failure.
+- It checks the whole lookahead window against nearby traffic, so it will sometimes say that no small change is enough. That is a true answer, not a failure.
 
 ## What this engine is not
 

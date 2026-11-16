@@ -35,7 +35,7 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Decide the data source. Adam chose real traffic only on November 15, 2026. Mock is removed from the app and kept only as a test fixture. Feeds are adsb.fi, then adsb.lol, then OpenSky.
 - [ ] Ask OpenSky about a license (contact@opensky-network.org) if OpenSky ever becomes a main feed again. It is now only the third choice.
 - [ ] Watch feed limits once the site has visitors. All visitors share the server address, so adsb.fi (1 request a second) and adsb.lol (500 a day) limits are shared too.
-- [ ] Decide whether to check vertical separation across the whole lookahead window. Today it is checked only at the moment of closest horizontal approach, as the tech spec defines it, so a pair inside both thresholds at some other moment is not flagged.
+- [x] Vertical separation is now checked across the whole lookahead window.
 - [ ] Wire in PostHog with `tools/analytics/posthog-rollout.mjs` and add the site to `fleet.json`. This was outside the first brief.
 - [x] Labels are now data blocks drawn only when zoomed in and when at most 120 aircraft are in view.
 - [x] Scope glass design pass (see design-language.md).
@@ -44,7 +44,8 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Colors now follow the small airplane emoji.
 - [x] The story moved from a popup that opened on arrival to an About page in the nav bar (Adam, November 15, 2026).
 - [x] Conflict resolution illustration: clicking a flagged aircraft shows one small change that would clear the pair.
-- [ ] Detection blind spot: vertical separation is checked only at the moment of closest horizontal approach. Scan the whole window, as the resolution check already does.
+- [x] Detection blind spot closed: the check now covers the whole window, so an aircraft climbing through another's level is caught.
+- [x] Link previews: the site now sends a preview image, title, and description when shared.
 - [ ] On cached data the page clock runs about 18 seconds behind, so aircraft are drawn slightly behind.
 - [ ] Look at the site on a real phone. Layout was measured at 375 px wide, not seen on a device.
 

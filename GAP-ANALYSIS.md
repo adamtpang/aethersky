@@ -33,4 +33,4 @@ Verification notes (2026-11-15): Benchmark side read live from the page and `dat
 Building the resolution illustration surfaced two findings worth keeping:
 
 - With the default 2 minute lookahead, a fast head-on pair often cannot be cleared by one aircraft making one small change. With 5 minutes it can. That is evidence for the benchmark's 5 minute lookahead, and for moving the "Lookahead" dimension next.
-- The detection check looks at vertical separation only at the moment of closest horizontal approach. The resolution check had to scan the whole window to be safe. The detection check should do the same.
+- The detection check looked at vertical separation only at the moment of closest horizontal approach. This was fixed on 2026-11-15: detection now covers the whole window.
