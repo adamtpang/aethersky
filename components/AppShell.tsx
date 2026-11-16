@@ -2,11 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
-import { pairKey } from "@/lib/conflict";
+import { pairKey, suggestResolution } from "@/lib/conflict";
 import {
   DEMO_DEFAULT_CHECK_FLOOR_FT,
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
+  type ConflictPair,
   type ConflictThresholds,
 } from "@/lib/types";
 import { useLiveTraffic } from "@/lib/useLiveTraffic";
@@ -111,6 +112,29 @@ export default function AppShell() {
         ? conflicts.filter((c) => c.a === selectedId || c.b === selectedId)
         : [],
     [conflicts, selectedId],
+  );
+
+  // What the check covers: everything at or above the floor.
+  const checkedAircraft = useMemo(
+    () =>
+      checkFloorFt > 0
+        ? aircraft.filter(
+            (ac) => ac.altitudeFt !== null && ac.altitudeFt >= checkFloorFt,
+          )
+        : aircraft,
+    [aircraft, checkFloorFt],
+  );
+  const flaggedKeys = useMemo(() => new Set(conflicts.map(pairKey)), [conflicts]);
+
+  // Worked out only for the pairs on screen in the card, so it stays cheap.
+  const resolutionFor = useCallback(
+    (pair: ConflictPair) => {
+      const a = byId.get(pair.a);
+      const b = byId.get(pair.b);
+      if (!a || !b) return null;
+      return suggestResolution(pair, a, b, thresholds, checkedAircraft, flaggedKeys);
+    },
+    [byId, thresholds, checkedAircraft, flaggedKeys],
   );
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
@@ -225,6 +249,7 @@ export default function AppShell() {
               pairs={selectedPairs}
               nameOf={(id) => byId.get(id)?.callsign ?? id}
               checkFloorFt={checkFloorFt}
+              resolutionFor={resolutionFor}
               onShowPair={(pair) => handleSelectPair(pairKey(pair))}
               onClose={handleClearSelection}
             />

@@ -16,6 +16,16 @@ Also tell users, in the README and in a short UI note, that traffic data may be 
 
 By default, aircraft below 10,000 ft are drawn but left out of the conflict check. Near airports, traffic is close together on purpose under air traffic control, and a straight-line check would flag hundreds of those pairs, which would bury the rest. The floor is a demo default, not a rule. The UI must show it next to the other thresholds, label it a demo default, and let the user set it to 0.
 
+## Suggested changes are an illustration
+
+When an aircraft in a flagged pair is selected, the app shows one small change that would clear the pair (for example "levels off", "turns right 20 degrees", or one climbing while the other descends). This is a teaching aid for the second half of the idea, and it has hard limits:
+
+- It must always be labeled "Illustration only, not an instruction", next to the suggestion itself.
+- It must never be worded as a command to a pilot, and never sent, spoken, or pushed anywhere.
+- It knows nothing about terrain, weather, airspace, aircraft performance, or what a controller has already said.
+- It only tries a short fixed list of changes, with demo values (1,500 fpm, 20 and 45 degree turns, 10 percent slower).
+- It checks the whole lookahead window against nearby traffic, which is stricter than the detection check, so it will sometimes say that no small change is enough. That is a true answer, not a failure.
+
 ## What this engine is not
 
 The conflict predictor is a first-order geometric check:
