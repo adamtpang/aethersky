@@ -22,9 +22,12 @@ const POLL_MS = 45_000;
 const TICK_MS = 5_000;
 /**
  * An earlier picture older than this is not shown at all. It is only ever a
- * placeholder for the few seconds before live traffic arrives.
+ * placeholder for the few seconds before live traffic arrives. Thirty
+ * minutes (Adam, 2026-11-15, raised from ten): a quiet site otherwise has
+ * nothing to show a cold visitor. It is always drawn faint and labeled
+ * with its age.
  */
-export const EARLIER_MAX_AGE_SEC = 600;
+export const EARLIER_MAX_AGE_SEC = 1800;
 /** While regions are streaming in, redraw at most this often. */
 const STREAM_REDRAW_MS = 350;
 

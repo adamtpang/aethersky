@@ -56,7 +56,7 @@ A full pass over the country takes about 30 seconds, so a visitor who arrives wh
 - The loading notice says it is an earlier picture and how many minutes old it is.
 - It is never used for conflict checks, never flagged, and cannot be selected.
 - Positions are as last seen. They are not projected forward.
-- It is not shown at all if it is more than 10 minutes old.
+- It is not shown at all if it is more than 30 minutes old.
 - It is removed the moment the first live sweep finishes, and also if that sweep fails. After a failure the map shows nothing, as before.
 - It is hidden in the "Conflicts only" view.
 
