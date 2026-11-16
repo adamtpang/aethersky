@@ -482,7 +482,7 @@ export default function Sidebar({
         ) : null}
         <p className="mt-1">
           aethersky is an open-source teaching demo. Thresholds are demo
-          defaults, not FAA, ICAO, or TCAS minima. Logo icon from Lucide.
+          defaults, not FAA, ICAO, or TCAS minima. Logo from Microsoft Fluent Emoji.
         </p>
       </footer>
     </aside>

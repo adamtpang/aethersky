@@ -59,6 +59,10 @@ Defined in `app/globals.css`.
 
 The emoji looks different on each platform. These values were sampled on November 15, 2026 from Windows, where it has coral wings (#f45d7f, #e3445e, #a23958), a lavender-white body (#f0e8f6, #d2ccdc, #b4a3b8), a blue cockpit (#40d0f0), and a plum propeller (#403050).
 
+## Logo
+
+The logo and favicon are the small airplane emoji itself, in Microsoft's open-source Fluent Emoji artwork (MIT). The palette above is sampled from it, so the mark and the interface always agree.
+
 ## Type
 
 - **Mono system stack** for everything: names, figures, labels. It needs no download and digits line up in columns.

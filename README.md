@@ -141,7 +141,7 @@ The name "Schafer" is written here without a diacritic only to keep this file in
 
 ## Credits
 
-- Logo: the plane icon from [Lucide](https://lucide.dev), ISC license. The notice is in [docs/brand/LUCIDE-LICENSE.txt](docs/brand/LUCIDE-LICENSE.txt). It is a shared open-source icon, not a registered or exclusive mark.
+- Logo and favicon: the small airplane emoji, in Microsoft's open-source [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) artwork, MIT license. The notice is in [docs/brand/FLUENT-EMOJI-LICENSE.txt](docs/brand/FLUENT-EMOJI-LICENSE.txt). It is shared artwork, not a registered or exclusive mark.
 - Map: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, drawn with [Leaflet](https://leafletjs.com).
 - Traffic: [adsb.fi](https://adsb.fi), [adsb.lol](https://adsb.lol), and [The OpenSky Network](https://opensky-network.org).
 
