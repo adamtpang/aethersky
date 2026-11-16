@@ -1,6 +1,11 @@
 import { FeedError, REQUEST_TIMEOUT_MS, finiteOrNull as num } from "./feedError";
 import { ADSB_FI, mapReadsbAircraft, readsbRows } from "./readsb";
-import { encodeSighting, type SweepEvent, type WireRow } from "./wire";
+import {
+  encodeSighting,
+  type SweepEvent,
+  type TrafficSnapshot,
+  type WireRow,
+} from "./wire";
 
 /**
  * Whole-country live traffic. No feed answers a single request for the
@@ -30,12 +35,13 @@ export const NATIONAL_TILES: ReadonlyArray<readonly [number, number]> = [
 ];
 
 /**
- * The order regions are fetched in: the busiest airspace first, so the
- * first aircraft a visitor sees are where most of the traffic is.
+ * The order regions are fetched in. It jumps around the country so the map
+ * fills in evenly from the first few seconds, starting near the busiest
+ * airspace, instead of painting one coast and then the other.
  */
 const SWEEP_ORDER: ReadonlyArray<number> = [
-  19, 12, 18, 25, 11, 17, 24, 13, 20, 10, 16, 23, 29, 28, 4, 9, 15, 22, 27, 14,
-  21, 6, 7, 8, 3, 26, 1, 2, 0, 5,
+  11, 13, 28, 22, 3, 0, 25, 19, 14, 17, 20, 5, 18, 8, 23, 12, 29, 10, 1, 6, 7,
+  21, 15, 27, 24, 9, 2, 26, 16, 4,
 ];
 
 /** adsb.fi allows 1 request per second. Stay a little under it. */
@@ -220,6 +226,8 @@ export class Sweep {
 
 // In-memory state for this server instance. No database.
 let current: Sweep | null = null;
+/** The most recent sweep that finished without failing, however old. */
+let lastGood: TrafficSnapshot | null = null;
 
 /**
  * The sweep to read from: the one in progress, or a recent finished one, or
@@ -231,8 +239,22 @@ export function getNationalSweep(): Sweep {
     const ttl = current.failed ? FAILED_TTL_MS : SWEEP_TTL_MS;
     if (Date.now() - current.finishedAtMs < ttl) return current;
   }
-  current = new Sweep();
-  return current;
+  const sweep = new Sweep();
+  current = sweep;
+  void sweep.done.then(() => {
+    const snapshot = snapshotOf(sweep);
+    if (snapshot) lastGood = snapshot;
+  });
+  return sweep;
+}
+
+/**
+ * The last finished sweep this server instance has seen, at once, without
+ * waiting for a new one. Null on an instance that has not finished one yet.
+ * It can be old: the page decides whether it is too old to show.
+ */
+export function lastSnapshot(): TrafficSnapshot | null {
+  return lastGood;
 }
 
 /** The sweep as a stream of JSON lines, one event per line. */
@@ -256,4 +278,24 @@ export function nationalStream(sweep: Sweep = getNationalSweep()): ReadableStrea
       unsubscribe();
     },
   });
+}
+
+/**
+ * A finished sweep as one object: every aircraft once, at its freshest
+ * sighting. Null while the sweep is running, or if it failed.
+ */
+export function snapshotOf(sweep: Sweep): TrafficSnapshot | null {
+  const end = sweep.events.find(
+    (event): event is Extract<SweepEvent, { t: "end" }> => event.t === "end",
+  );
+  if (!end || end.error) return null;
+  const freshest = new Map<string, WireRow>();
+  for (const event of sweep.events) {
+    if (event.t !== "region") continue;
+    for (const row of event.rows) {
+      const known = freshest.get(row[0]);
+      if (!known || row[8] > known[8]) freshest.set(row[0], row);
+    }
+  }
+  return { finishedAtUnix: end.finishedAtUnix, rows: [...freshest.values()] };
 }

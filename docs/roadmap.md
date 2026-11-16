@@ -47,6 +47,8 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Detection blind spot closed: the check now covers the whole window, so an aircraft climbing through another's level is caught.
 - [x] Link previews: the site now sends a preview image, title, and description when shared.
 - [ ] On cached data the page clock runs about 18 seconds behind, so aircraft are drawn slightly behind.
+- [x] Cold start: a first visitor used to watch the map fill in for about 30 seconds. The page now shows the last finished sweep faintly and labeled while live traffic loads, and regions load spread across the country.
+- [ ] Ask adsb.fi for a higher request rate. The 30 second sweep comes from their limit of 1 request per second. This is the only thing that makes the real number smaller.
 - [ ] Look at the site on a real phone. Layout was measured at 375 px wide, not seen on a device.
 
 ## Later, only after the MVP is honest and reviewed

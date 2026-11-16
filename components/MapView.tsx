@@ -14,6 +14,8 @@ export interface MapFocus {
 
 interface MapViewProps {
   aircraft: Aircraft[];
+  /** An earlier picture, drawn faintly while live traffic loads. */
+  ghosts: Aircraft[];
   byId: ReadonlyMap<string, Aircraft>;
   conflicts: ConflictPair[];
   conflictIds: ReadonlySet<string>;
@@ -127,6 +129,7 @@ function FocusController({
 /** Leaflet map on default OpenStreetMap tiles. No Mapbox, no paid tiles. */
 export default function MapView({
   aircraft,
+  ghosts,
   byId,
   conflicts,
   conflictIds,
@@ -160,6 +163,7 @@ export default function MapView({
       <FocusController focus={focus} touchedRef={touchedRef} />
       <TrafficCanvas
         aircraft={aircraft}
+        ghosts={ghosts}
         byId={byId}
         conflicts={conflicts}
         conflictIds={conflictIds}

@@ -46,7 +46,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The app opens on the whole contiguous United States with live airborne traffic, with no credentials needed. Aircraft appear within a second or two and fill in region by region, busiest airspace first. A full pass over the country takes about 35 seconds. It shows real traffic only. If no live feed answers, the map shows no aircraft and a LIVE DATA UNAVAILABLE banner. It never substitutes simulated traffic.
+Open http://localhost:3000. The app opens on the whole contiguous United States with live airborne traffic, with no credentials needed. A full pass over the country takes about 35 seconds, because the feed allows one request a second. To cover that wait, the page first shows the last finished pass as faint dots, labeled as an earlier picture, then replaces it with live aircraft region by region. It shows real traffic only. If no live feed answers, the map shows no aircraft and a LIVE DATA UNAVAILABLE banner. It never substitutes simulated traffic.
 
 Other commands:
 

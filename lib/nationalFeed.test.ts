@@ -238,3 +238,57 @@ describe("projection and wire format", () => {
     });
   });
 });
+
+describe("snapshot of the last sweep", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW_MS);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("is null while the sweep is still running", async () => {
+    stubFeed(() => ok([]));
+    const { getNationalSweep, snapshotOf } = await load();
+    const sweep = getNationalSweep();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(snapshotOf(sweep)).toBeNull();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    expect(snapshotOf(sweep)).not.toBeNull();
+  });
+
+  it("holds every aircraft once, at its freshest sighting", async () => {
+    stubFeed((i) => {
+      if (i === 0) return ok([{ hex: "dup", flight: "FIRST", lat: 40, lon: -100, alt_baro: 30000, seen_pos: 20 }]);
+      if (i === 1) {
+        return ok([
+          { hex: "dup", flight: "FRESH", lat: 41, lon: -100, alt_baro: 31000, seen_pos: 1 },
+          { hex: "solo", flight: "SOLO", lat: 35, lon: -90, alt_baro: 20000 },
+        ]);
+      }
+      return ok([]);
+    });
+    const { getNationalSweep, snapshotOf } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    const snapshot = snapshotOf(sweep)!;
+    expect(snapshot.finishedAtUnix).toBe(end(sweep.events).finishedAtUnix);
+    expect(snapshot.rows.map((r) => r[1]).sort()).toEqual(["FRESH", "SOLO"]);
+  });
+
+  it("is null for a sweep that failed, so old traffic is never offered after a failure", async () => {
+    stubFeed(() => new Response("", { status: 503 }));
+    const { getNationalSweep, snapshotOf } = await load();
+    const sweep = getNationalSweep();
+    await vi.runAllTimersAsync();
+    await sweep.done;
+    expect(snapshotOf(sweep)).toBeNull();
+  });
+});
