@@ -2,6 +2,8 @@
 
 Advisory only. Not certified. Does not replace ATC, ATIS, TCAS or pilot judgment. Not for navigation.
 
+> **Historical document.** This is the original build brief for the first version, kept for the record. The app has moved on since: it shows real traffic only (no mock data), covers the whole contiguous United States, and has a different look. For how it works today, read the root [README.md](../README.md), [data-sources.md](data-sources.md), [safety.md](safety.md), and [design-language.md](design-language.md).
+
 This file plus [tech-spec.md](tech-spec.md), [safety.md](safety.md), and [data-sources.md](data-sources.md) is the complete build brief. Read them, and the root [README.md](../README.md), before writing code. Do not invent a different algorithm, a different disclaimer, or silent default numbers when a value is already specified.
 
 ## Copy-paste kickoff prompt
