@@ -57,6 +57,14 @@ export interface BoundingBox {
  * Demo defaults only. These are teaching values for this advisory demo.
  * They are NOT FAA, ICAO, or TCAS separation minima.
  */
+/**
+ * Demo default only, not a rule. Aircraft below this altitude are left out
+ * of the conflict check. Near airports, traffic is deliberately close
+ * together under air traffic control, and a straight-line check flags
+ * hundreds of those pairs. Set to 0 to check everything.
+ */
+export const DEMO_DEFAULT_CHECK_FLOOR_FT = 10_000;
+
 export const DEMO_DEFAULT_THRESHOLDS: ConflictThresholds = {
   lateralNm: 5,
   verticalFt: 1000,

@@ -85,7 +85,7 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="story-title"
-        className="w-full max-w-2xl rounded-lg border border-line bg-panel shadow-2xl"
+        className="w-full max-w-2xl border border-line bg-panel font-[family-name:var(--font-prose)] shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
@@ -138,12 +138,19 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
             </p>
           </Step>
 
-          <Step n={3} title="The idea">
+          <Step n={3} title="The proposed fix">
+            <p>
+              It is not about flying farther apart. It is about who does the
+              watching. Today a controller on the ground spots two aircraft
+              converging and radios one of them to climb, descend, or turn.
+              That only works while the ground network is up.
+            </p>
             <p>
               Most aircraft already broadcast their own position, altitude,
-              and speed by radio, a system called ADS-B. So in principle each
-              aircraft could work out for itself whether another is about to
-              come too close, with no ground network in the loop.
+              and speed by radio, a system called ADS-B. So each aircraft
+              could listen to the others directly, spot a conflict minutes
+              ahead, and agree on a small change (one climbs, one descends)
+              with no ground network in the loop.
             </p>
           </Step>
 
@@ -153,8 +160,10 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
               ADS-B receivers. For each pair, the page assumes both keep
               flying straight and asks one question: in the next two minutes,
               will they pass within 5 nautical miles and 1,000 feet? Pairs
-              that would are drawn in amber. The numbers are demo defaults,
-              not official separation rules, and you can change them.
+              that would are marked and listed as conflicts. Click any
+              aircraft to see what it is doing and whether it was flagged.
+              The numbers are demo defaults, not official separation rules,
+              and you can change them.
             </p>
           </Step>
 
@@ -175,7 +184,17 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
             </p>
           </Step>
 
-          <Step n={6} title="What a real version would take">
+          <Step n={6} title="What you can do here">
+            <p>
+              Look at the live picture, switch to &quot;Conflicts only&quot;,
+              and click a flagged pair to see what the check predicts. Move
+              the sliders and watch how much the answer depends on the
+              numbers. If you build things, fork the code and make the check
+              better.
+            </p>
+          </Step>
+
+          <Step n={7} title="What a real version would take">
             <ol className="list-decimal space-y-1 pl-4">
               <li>Run on the aircraft and hear other aircraft directly by radio.</li>
               <li>Handle broadcasts that are missing, late, or faked.</li>

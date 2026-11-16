@@ -1,7 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { CONUS_BOUNDS } from "@/lib/geo";
 import type { Aircraft, ConflictPair } from "@/lib/types";
@@ -55,6 +55,51 @@ function SizeWatcher({ touchedRef }: { touchedRef: RefObject<boolean> }) {
   return null;
 }
 
+/**
+ * Keeps the map position in the address bar as #zoom/lat/lon, plus the
+ * selected aircraft if there is one, so a view can be shared as a link.
+ * Reading it happens once, in `readHashView`.
+ */
+function HashSync({ selectedId }: { selectedId: string | null }) {
+  const map = useMap();
+  useEffect(() => {
+    const write = () => {
+      const c = map.getCenter();
+      const view = `#${map.getZoom()}/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}`;
+      // A selected aircraft rides along, so a link can point at one plane.
+      window.history.replaceState(null, "", selectedId ? `${view}/${selectedId}` : view);
+    };
+    write();
+    map.on("moveend", write);
+    return () => {
+      map.off("moveend", write);
+    };
+  }, [map, selectedId]);
+  return null;
+}
+
+/** A shared view from the address bar, if it holds a valid one. */
+export function readHashView(): {
+  center: [number, number];
+  zoom: number;
+  selectedId: string | null;
+} | null {
+  if (typeof window === "undefined") return null;
+  const match = /^#(\d{1,2})\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)(?:\/([0-9a-z~]{1,12}))?$/i.exec(
+    window.location.hash,
+  );
+  if (!match) return null;
+  const zoom = Number(match[1]);
+  const lat = Number(match[2]);
+  const lon = Number(match[3]);
+  if (zoom < 3 || zoom > 14 || Math.abs(lat) > 85 || Math.abs(lon) > 180) return null;
+  return {
+    center: [lat, lon],
+    zoom,
+    selectedId: match[4] ? match[4].toLowerCase() : null,
+  };
+}
+
 function FocusController({
   focus,
   touchedRef,
@@ -91,11 +136,15 @@ export default function MapView({
   onSelectAircraft,
   onClearSelection,
 }: MapViewProps) {
-  // True once a person or a selection has moved the map.
-  const touchedRef = useRef(false);
+  // A link can open the map on a shared view. Read once, when the map mounts.
+  const [shared] = useState(readHashView);
+  // True once a person, a selection, or a shared link has placed the map.
+  const touchedRef = useRef(shared !== null);
   return (
     <MapContainer
-      bounds={CONUS_BOUNDS}
+      {...(shared
+        ? { center: shared.center, zoom: shared.zoom }
+        : { bounds: CONUS_BOUNDS })}
       minZoom={3}
       maxZoom={14}
       worldCopyJump
@@ -107,6 +156,7 @@ export default function MapView({
         maxZoom={19}
       />
       <SizeWatcher touchedRef={touchedRef} />
+      <HashSync selectedId={selectedId} />
       <FocusController focus={focus} touchedRef={touchedRef} />
       <TrafficCanvas
         aircraft={aircraft}

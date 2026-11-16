@@ -10,7 +10,7 @@ export default function DisclaimerBar() {
     <div
       role="note"
       aria-label="Safety disclaimer"
-      className="z-[1100] shrink-0 border-b border-warn/50 bg-[#2a1f08] px-4 py-2 text-center text-[13px] font-semibold leading-snug text-[#ffdf9a] sm:text-sm"
+      className="z-[1100] shrink-0 bg-warn px-4 py-2 text-center text-[13px] font-bold leading-snug text-[#1c0a12] sm:text-sm"
     >
       {DISCLAIMER_TEXT}
     </div>

@@ -12,6 +12,10 @@ Every page, including the placeholder and the first real app, must show this sen
 
 Also tell users, in the README and in a short UI note, that traffic data may be delayed, incomplete, or wrong.
 
+## The check floor
+
+By default, aircraft below 10,000 ft are drawn but left out of the conflict check. Near airports, traffic is close together on purpose under air traffic control, and a straight-line check would flag hundreds of those pairs, which would bury the rest. The floor is a demo default, not a rule. The UI must show it next to the other thresholds, label it a demo default, and let the user set it to 0.
+
 ## What this engine is not
 
 The conflict predictor is a first-order geometric check:

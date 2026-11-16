@@ -4,11 +4,13 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import { pairKey } from "@/lib/conflict";
 import {
+  DEMO_DEFAULT_CHECK_FLOOR_FT,
   DEMO_DEFAULT_THRESHOLDS,
   type Aircraft,
   type ConflictThresholds,
 } from "@/lib/types";
 import { useLiveTraffic } from "@/lib/useLiveTraffic";
+import AircraftCard from "./AircraftCard";
 import FeedBanner from "./FeedBanner";
 import {
   ALT_FILTER_MAX_FT,
@@ -57,15 +59,24 @@ export default function AppShell() {
   const [thresholds, setThresholds] = useState<ConflictThresholds>(
     DEMO_DEFAULT_THRESHOLDS,
   );
+  const [checkFloorFt, setCheckFloorFt] = useState(DEMO_DEFAULT_CHECK_FLOOR_FT);
   const [filters, setFilters] = useState<DisplayFilters>(DEFAULT_FILTERS);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A shared link can end in an aircraft id, which opens with it selected.
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const shared = /^#\d{1,2}\/[^/]+\/[^/]+\/([0-9a-z~]{1,12})$/i.exec(
+      window.location.hash,
+    );
+    return shared ? shared[1].toLowerCase() : null;
+  });
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [conflictsOnly, setConflictsOnly] = useState(false);
 
   // Real traffic only. When the feed fails, the map shows no aircraft and
   // says so. Simulated traffic is never substituted.
-  const traffic = useLiveTraffic(thresholds);
+  const traffic = useLiveTraffic(thresholds, checkFloorFt);
   const { aircraft, conflicts } = traffic;
 
   const byId = useMemo(
@@ -86,10 +97,20 @@ export default function AppShell() {
   // drawn and listed, and never hide an aircraft in a flagged pair.
   const visibleAircraft = useMemo(
     () =>
-      aircraft.filter(
-        (ac) => conflictIds.has(ac.icao24) || matchesFilters(ac, filters),
+      aircraft.filter((ac) =>
+        conflictsOnly
+          ? conflictIds.has(ac.icao24)
+          : conflictIds.has(ac.icao24) || matchesFilters(ac, filters),
       ),
-    [aircraft, conflictIds, filters],
+    [aircraft, conflictIds, filters, conflictsOnly],
+  );
+
+  const selectedPairs = useMemo(
+    () =>
+      selectedId
+        ? conflicts.filter((c) => c.a === selectedId || c.b === selectedId)
+        : [],
+    [conflicts, selectedId],
   );
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
@@ -172,6 +193,42 @@ export default function AppShell() {
             onClearSelection={handleClearSelection}
           />
           <MapLegend />
+          <div
+            role="group"
+            aria-label="What the map shows"
+            className="absolute right-3 top-3 z-[1001] flex border border-line bg-panel/95 text-[12px]"
+          >
+            <button
+              type="button"
+              aria-pressed={!conflictsOnly}
+              onClick={() => setConflictsOnly(false)}
+              className={`px-2.5 py-1.5 ${
+                conflictsOnly ? "text-muted hover:text-fg" : "bg-accent font-semibold text-bg"
+              }`}
+            >
+              All traffic
+            </button>
+            <button
+              type="button"
+              aria-pressed={conflictsOnly}
+              onClick={() => setConflictsOnly(true)}
+              className={`border-l border-line px-2.5 py-1.5 ${
+                conflictsOnly ? "bg-warn font-semibold text-bg" : "text-muted hover:text-fg"
+              }`}
+            >
+              Conflicts only ({conflicts.length})
+            </button>
+          </div>
+          {selected ? (
+            <AircraftCard
+              aircraft={selected}
+              pairs={selectedPairs}
+              nameOf={(id) => byId.get(id)?.callsign ?? id}
+              checkFloorFt={checkFloorFt}
+              onShowPair={(pair) => handleSelectPair(pairKey(pair))}
+              onClose={handleClearSelection}
+            />
+          ) : null}
           {traffic.error ? (
             <MapNotice>
               Live traffic is unavailable, so no aircraft are shown. Retrying
@@ -184,7 +241,16 @@ export default function AppShell() {
                 : "Loading live traffic"}
             </MapNotice>
           ) : aircraft.length === 0 ? (
-            <MapNotice>The feed reported no airborne aircraft right now.</MapNotice>
+            <MapNotice>
+              {traffic.refreshing
+                ? "Refreshing live traffic"
+                : "The feed reported no airborne aircraft right now."}
+            </MapNotice>
+          ) : conflictsOnly && conflicts.length === 0 ? (
+            <MapNotice>
+              No conflicts right now, so nothing is drawn. Switch to All
+              traffic to see every aircraft.
+            </MapNotice>
           ) : null}
         </div>
         <Sidebar
@@ -201,6 +267,10 @@ export default function AppShell() {
           onOpenStory={() => setStoryOpen(true)}
           filters={filters}
           thresholds={thresholds}
+          conflictsOnly={conflictsOnly}
+          onConflictsOnlyChange={setConflictsOnly}
+          checkFloorFt={checkFloorFt}
+          onCheckFloorChange={setCheckFloorFt}
           onFiltersChange={setFilters}
           onThresholdsChange={setThresholds}
         />

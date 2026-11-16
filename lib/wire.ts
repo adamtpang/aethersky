@@ -28,6 +28,15 @@ export type WireRow = [
 
 export type SweepEvent =
   | {
+      /**
+       * Always the first line. The server's clock at the moment this
+       * response was written. A cached copy carries an old value, so the
+       * page adds the response's Age header to get the real time.
+       */
+      t: "clock";
+      nowUnix: number;
+    }
+  | {
       t: "start";
       source: FeedSource;
       /** Server clock when the sweep began, unix seconds. */
