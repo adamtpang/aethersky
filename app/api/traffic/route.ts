@@ -14,8 +14,10 @@ export async function GET() {
     headers: {
       "Content-Type": "application/x-ndjson; charset=utf-8",
       // Let the CDN hand the same sweep to every visitor and refresh it in
-      // the background, so visitors do not each trigger one.
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+      // the background, so visitors do not each trigger one. Kept short:
+      // a cached copy older than about a minute holds positions too old to
+      // project, and the page would have to throw them away.
+      "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
     },
   });
 }

@@ -17,7 +17,7 @@ import type { SweepEvent, WireRow } from "./wire";
  * How often the page asks for the national sweep. The server refreshes it
  * about once a minute and shares it with every visitor.
  */
-const POLL_MS = 60_000;
+const POLL_MS = 45_000;
 /** How often positions are moved forward along their tracks. */
 const TICK_MS = 5_000;
 /** While regions are streaming in, redraw at most this often. */
@@ -87,6 +87,11 @@ export function useLiveTraffic(
   const sightingsRef = useRef(new Map<string, WireRow>());
   /** Server clock minus this device's clock, seconds. */
   const clockOffsetRef = useRef(0);
+  /** False until a response has told us what time the server thinks it is. */
+  const clockKnownRef = useRef(false);
+  /** Seconds a cached response sat in the CDN before reaching this page. */
+  const responseAgeRef = useRef(0);
+  const lastLoadAtRef = useRef(0);
   const loadingRef = useRef(false);
   const redrawTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -94,9 +99,19 @@ export function useLiveTraffic(
 
   /** Project every sighting to now and publish the result. */
   const rebuild = useCallback(() => {
-    const nowUnix = Date.now() / 1000 + clockOffsetRef.current;
     const sightings = sightingsRef.current;
     const next: Aircraft[] = [];
+    if (!clockKnownRef.current) {
+      // Without a trusted clock nothing can be called stale, so nothing is
+      // projected or dropped yet. Show positions as reported.
+      for (const row of sightings.values()) {
+        const asReported = projectRow(row, row[8]);
+        if (asReported) next.push(asReported);
+      }
+      setAircraft(next);
+      return;
+    }
+    const nowUnix = Date.now() / 1000 + clockOffsetRef.current;
     for (const [id, row] of sightings) {
       const projected = projectRow(row, nowUnix);
       if (projected) next.push(projected);
@@ -115,7 +130,13 @@ export function useLiveTraffic(
 
   const handleEvent = useCallback(
     (event: SweepEvent) => {
-      if (event.t === "start") {
+      if (event.t === "clock") {
+        // Real server time now: when the response was written, plus how
+        // long a cache held it.
+        clockOffsetRef.current =
+          event.nowUnix + responseAgeRef.current - Date.now() / 1000;
+        clockKnownRef.current = true;
+      } else if (event.t === "start") {
         setMeta((m) => ({
           ...m,
           source: event.source,
@@ -132,8 +153,6 @@ export function useLiveTraffic(
         setMeta((m) => ({ ...m, regionsDone: event.done }));
         scheduleRebuild();
       } else {
-        // The end of a sweep is the best moment to line the clocks up.
-        clockOffsetRef.current = event.finishedAtUnix - Date.now() / 1000;
         if (event.error) {
           sightingsRef.current.clear();
           setMeta((m) => ({
@@ -164,12 +183,15 @@ export function useLiveTraffic(
   const load = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
+    lastLoadAtRef.current = Date.now();
     setMeta((m) => ({ ...m, refreshing: true }));
     try {
       const res = await fetch("/api/traffic");
       if (!res.ok || !res.body) {
         throw new Error(`The traffic service answered with status ${res.status}.`);
       }
+      const age = Number(res.headers.get("age"));
+      responseAgeRef.current = Number.isFinite(age) && age > 0 ? age : 0;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -209,25 +231,45 @@ export function useLiveTraffic(
     }
   }, [handleEvent, rebuild]);
 
-  // Read a sweep now, then once a minute while the tab is visible.
+  // Read a sweep now, then on a timer while the tab is visible. A tab that
+  // comes back from the background refreshes at once, because everything it
+  // was holding has gone stale in the meantime.
   useEffect(() => {
     void load();
     const timer = setInterval(() => {
       if (!document.hidden) void load();
     }, POLL_MS);
-    return () => clearInterval(timer);
+    const onVisible = () => {
+      if (!document.hidden && Date.now() - lastLoadAtRef.current > 10_000) {
+        void load();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // Between sweeps, keep moving aircraft forward along their tracks.
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!document.hidden) rebuild();
+      if (document.hidden) return;
+      rebuild();
+      // Everything expired and nothing is on its way: ask again now.
+      if (
+        sightingsRef.current.size === 0 &&
+        !loadingRef.current &&
+        Date.now() - lastLoadAtRef.current > 10_000
+      ) {
+        void load();
+      }
     }, TICK_MS);
     return () => {
       clearInterval(timer);
       if (redrawTimerRef.current !== null) clearTimeout(redrawTimerRef.current);
     };
-  }, [rebuild]);
+  }, [rebuild, load]);
 
   // The conflict check runs in a worker. If a worker cannot start, it runs here.
   useEffect(() => {

@@ -13,19 +13,19 @@ export default function MapLegend({ inline = false }: { inline?: boolean }) {
     >
       <p className="flex items-center gap-2">
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M6 1 L10 6 L6 11 L2 6 Z" fill="none" stroke="#35d0e0" strokeWidth="1.4" />
+          <path d="M6 1 L10 6 L6 11 L2 6 Z" fill="none" stroke="#dcd4ea" strokeWidth="1.4" />
         </svg>
         Hollow diamond: airborne aircraft
       </p>
       <p className="flex items-center gap-2">
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-          <circle cx="6" cy="6" r="4.5" fill="#ffb000" />
+          <circle cx="6" cy="6" r="4.5" fill="#f45d7f" />
         </svg>
         Filled circle: in a pair flagged by the demo check
       </p>
       <p className="flex items-center gap-2">
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="9" height="9" fill="#ff4d3d" />
+          <rect x="1.5" y="1.5" width="9" height="9" fill="#40d0f0" />
         </svg>
         Filled square: the pair you selected
       </p>

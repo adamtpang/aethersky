@@ -56,29 +56,36 @@ function SizeWatcher({ touchedRef }: { touchedRef: RefObject<boolean> }) {
 }
 
 /**
- * Keeps the map position in the address bar as #zoom/lat/lon, so a view can
- * be shared as a link. Reading it happens once, in `readHashView`.
+ * Keeps the map position in the address bar as #zoom/lat/lon, plus the
+ * selected aircraft if there is one, so a view can be shared as a link.
+ * Reading it happens once, in `readHashView`.
  */
-function HashSync() {
+function HashSync({ selectedId }: { selectedId: string | null }) {
   const map = useMap();
   useEffect(() => {
     const write = () => {
       const c = map.getCenter();
-      const hash = `#${map.getZoom()}/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}`;
-      window.history.replaceState(null, "", hash);
+      const view = `#${map.getZoom()}/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}`;
+      // A selected aircraft rides along, so a link can point at one plane.
+      window.history.replaceState(null, "", selectedId ? `${view}/${selectedId}` : view);
     };
+    write();
     map.on("moveend", write);
     return () => {
       map.off("moveend", write);
     };
-  }, [map]);
+  }, [map, selectedId]);
   return null;
 }
 
 /** A shared view from the address bar, if it holds a valid one. */
-function readHashView(): { center: [number, number]; zoom: number } | null {
+export function readHashView(): {
+  center: [number, number];
+  zoom: number;
+  selectedId: string | null;
+} | null {
   if (typeof window === "undefined") return null;
-  const match = /^#(\d{1,2})\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(
+  const match = /^#(\d{1,2})\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)(?:\/([0-9a-z~]{1,12}))?$/i.exec(
     window.location.hash,
   );
   if (!match) return null;
@@ -86,7 +93,11 @@ function readHashView(): { center: [number, number]; zoom: number } | null {
   const lat = Number(match[2]);
   const lon = Number(match[3]);
   if (zoom < 3 || zoom > 14 || Math.abs(lat) > 85 || Math.abs(lon) > 180) return null;
-  return { center: [lat, lon], zoom };
+  return {
+    center: [lat, lon],
+    zoom,
+    selectedId: match[4] ? match[4].toLowerCase() : null,
+  };
 }
 
 function FocusController({
@@ -145,7 +156,7 @@ export default function MapView({
         maxZoom={19}
       />
       <SizeWatcher touchedRef={touchedRef} />
-      <HashSync />
+      <HashSync selectedId={selectedId} />
       <FocusController focus={focus} touchedRef={touchedRef} />
       <TrafficCanvas
         aircraft={aircraft}

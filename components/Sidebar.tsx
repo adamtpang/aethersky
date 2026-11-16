@@ -37,6 +37,8 @@ interface SidebarProps {
   onSelectPair: (key: string) => void;
   filters: DisplayFilters;
   thresholds: ConflictThresholds;
+  conflictsOnly: boolean;
+  onConflictsOnlyChange: (next: boolean) => void;
   checkFloorFt: number;
   onCheckFloorChange: (next: number) => void;
   onFiltersChange: (next: DisplayFilters) => void;
@@ -107,6 +109,8 @@ export default function Sidebar({
   onSelectPair,
   filters,
   thresholds,
+  conflictsOnly,
+  onConflictsOnlyChange,
   checkFloorFt,
   onCheckFloorChange,
   onFiltersChange,
@@ -171,7 +175,7 @@ export default function Sidebar({
         <p className="font-mono text-xs" aria-live="polite">
           {hasTraffic && source ? (
             <>
-              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#4ade80]" aria-hidden="true" />
+              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
               <span className="text-fg">Live</span>
               <span className="text-muted">
                 {` \u00b7 ${source.name} \u00b7 ${totalAircraft.toLocaleString("en-US")} airborne \u00b7 ${sweepNote}`}
@@ -186,7 +190,7 @@ export default function Sidebar({
         {feedError ? (
           <p
             role="alert"
-            className="mt-2 rounded border border-danger/50 bg-danger/10 px-2 py-1.5 text-xs leading-snug text-[#ffc2bc]"
+            className="mt-2 rounded border border-danger/50 bg-danger/10 px-2 py-1.5 text-xs leading-snug text-[#ffc8d4]"
           >
             {feedError} Retrying automatically.
           </p>
@@ -221,6 +225,34 @@ export default function Sidebar({
           </span>
         }
       >
+        <div className="mb-3 border border-line bg-bg px-2.5 py-2 text-[12px] leading-snug">
+          <p className="font-semibold text-fg">What counts as a conflict here</p>
+          <p className="mt-1 text-muted">
+            Two aircraft{checkFloorFt > 0 ? `, both above ${checkFloorFt.toLocaleString("en-US")} ft,` : ""}{" "}
+            that would pass within{" "}
+            <span className="text-fg">{thresholds.lateralNm} NM</span> sideways and{" "}
+            <span className="text-fg">
+              {thresholds.verticalFt.toLocaleString("en-US")} ft
+            </span>{" "}
+            up or down of each other in the next{" "}
+            <span className="text-fg">{thresholds.lookaheadSec} seconds</span>, if
+            both keep flying exactly as they are now.
+          </p>
+          <p className="mt-1 text-muted">
+            It is a prediction from a simple straight-line guess, using demo
+            numbers. It is not an official loss of separation, and most of
+            these pairs are already being handled by controllers.
+          </p>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-fg">
+            <input
+              type="checkbox"
+              checked={conflictsOnly}
+              onChange={(e) => onConflictsOnlyChange(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+            Show only these aircraft on the map
+          </label>
+        </div>
         {conflicts.length === 0 ? (
           <p className="text-muted">
             {traffic.phase !== "loading"
@@ -294,7 +326,7 @@ export default function Sidebar({
             <p className="mb-1 flex items-baseline justify-between gap-2">
               <span
                 className={`font-mono text-base font-semibold ${
-                  conflictIds.has(selected.icao24) ? "text-warn" : "text-accent"
+                  conflictIds.has(selected.icao24) ? "text-warn" : "text-fg"
                 }`}
               >
                 {selected.callsign}

@@ -39,6 +39,9 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [ ] Wire in PostHog with `tools/analytics/posthog-rollout.mjs` and add the site to `fleet.json`. This was outside the first brief.
 - [x] Labels are now data blocks drawn only when zoomed in and when at most 120 aircraft are in view.
 - [x] Scope glass design pass (see design-language.md).
+- [x] Fixed: aircraft could vanish after zooming or after the tab sat in the background. The page was judging cached positions against the wrong clock and discarding all of them. It now reads the server clock from the stream, refreshes as soon as a tab returns, and asks again at once if everything has expired.
+- [x] "Conflicts only" view, a plain definition of a conflict, and an info card when an aircraft is clicked.
+- [x] Colors now follow the small airplane emoji.
 - [ ] Look at the site on a real phone. Layout was measured at 375 px wide, not seen on a device.
 
 ## Later, only after the MVP is honest and reviewed

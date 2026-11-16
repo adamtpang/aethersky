@@ -6,9 +6,9 @@ aethersky is a free, non-certified public demo: a web map that shows public ADS-
 
 **Live: [https://aethersky.vercel.app](https://aethersky.vercel.app)**
 
-![Live aircraft over the contiguous United States, with flagged pairs ringed in amber](docs/screenshots/whole-country.jpg)
+![Live aircraft over the contiguous United States, with flagged pairs ringed in coral](docs/screenshots/whole-country.jpg)
 
-![A close view: hollow diamonds with track lines and controller-style data blocks](docs/screenshots/data-blocks.jpg)
+![A close view with one aircraft selected: its details, its track ahead, and data blocks on the others](docs/screenshots/data-blocks.jpg)
 
 It would not have prevented the November 13, 2026 ground stop, and it says so on the page. It is a picture of one idea, drawn in the open so people can argue with it and improve it. The background is in [Why this exists](#why-this-exists).
 
@@ -32,7 +32,7 @@ Good first projects:
 - Feed it from a cheap ADS-B radio receiver instead of the internet. That is the version that keeps working when a network is down.
 - Add layers: weather, airport delays, flight restrictions.
 
-House rules, all in [docs/safety.md](docs/safety.md): the disclaimer stays, real traffic only, and every threshold is labeled a demo default. Share a view with a link: the address bar holds the map position, for example `#10/40.640/-73.780`.
+House rules, all in [docs/safety.md](docs/safety.md): the disclaimer stays, real traffic only, and every threshold is labeled a demo default. Share a view with a link: the address bar holds the map position and the selected aircraft, for example `#10/40.640/-73.780` or `#9/38.066/-76.507/a0540a`.
 
 The build brief the first version was written from is in [docs/HANDOFF-fable.md](docs/HANDOFF-fable.md) and [docs/tech-spec.md](docs/tech-spec.md).
 
@@ -56,6 +56,10 @@ Other commands:
 No feed answers one request for the whole country, so the server sweeps it: `/api/traffic` asks [adsb.fi](https://adsb.fi) for 30 overlapping circles of 250 NM, one request at a time to stay inside its limit of 1 request per second. A sweep takes about 35 seconds, is shared by every visitor, and is refreshed about once a minute. The route streams each region as it arrives, so the page can draw it straight away. The page then moves every aircraft forward along its track to the current moment every 5 seconds, so every position on the map is an estimate. A report older than 120 seconds is dropped. Aircraft on the ground are left out. Alaska and Hawaii are not covered.
 
 A second route, `/api/aircraft`, returns one bounding box and tries three feeds in order: adsb.fi, then [adsb.lol](https://adsb.lol), then [OpenSky](https://opensky-network.org). The app no longer uses it, but it is handy for forks. All three feeds work with no key. Optional keys go in `.env.local` (copy `.env.example`): `ADSBLOL_API_KEY` raises the adsb.lol daily limit, and `OPENSKY_CLIENT_ID` with `OPENSKY_CLIENT_SECRET` raises the OpenSky one. Never commit that file.
+
+## What a conflict means here
+
+Two aircraft, both above the check floor, that would pass within 5 NM sideways and 1,000 ft up or down of each other in the next 120 seconds, if both keep flying exactly as they are now. It is a prediction from a straight-line guess using demo numbers. It is not an official loss of separation, and most flagged pairs are already being handled by controllers. The "Conflicts only" switch on the map hides everything else. Clicking any aircraft shows what it is doing and whether it was flagged.
 
 ## How the check works
 

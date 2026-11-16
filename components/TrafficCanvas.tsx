@@ -29,12 +29,12 @@ interface TrafficCanvasProps {
 
 // Scope glass palette. See docs/design-language.md. Color never carries a
 // meaning alone: each state also has its own shape.
-const TRAFFIC = "#35d0e0"; // hollow diamond: traffic that is not flagged
-const WARN = "#ffb000"; // filled circle: aircraft in a flagged pair
-const DANGER = "#ff4d3d"; // filled square: the selected pair
-const TRACK = "#ff4fd8"; // the selected aircraft's track
-const FG = "#dfe6ec";
-const HALO = "#000000";
+const TRAFFIC = "#dcd4ea"; // hollow diamond: traffic that is not flagged
+const WARN = "#f45d7f"; // filled circle: aircraft in a flagged pair
+const DANGER = "#40d0f0"; // filled square: the selected pair
+const TRACK = "#40d0f0"; // the selected aircraft's track
+const FG = "#f0e8f6";
+const HALO = "#0e0b14";
 const FONT = '11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
 /** How close a click must be to an aircraft to select it, in pixels. */
@@ -93,7 +93,7 @@ function sprite(shape: Shape, size: number, color: string, dpr: number): Sprite 
       ctx.lineTo(c, c + size);
       ctx.lineTo(c - size * 0.8, c);
       ctx.closePath();
-      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      ctx.fillStyle = "rgba(14, 11, 20, 0.7)";
       ctx.fill();
       ctx.lineWidth = 1.4;
       ctx.stroke();

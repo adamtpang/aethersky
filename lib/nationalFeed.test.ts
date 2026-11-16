@@ -140,10 +140,13 @@ describe("national sweep", () => {
     // The stream is the same events, one JSON object per line.
     const text = await new Response(nationalStream(first)).text();
     const lines = text.trim().split("\n").map((line) => JSON.parse(line) as SweepEvent);
-    expect(lines).toEqual(first.events);
+    // The first line is the server clock, so a page can tell how old a
+    // cached copy is. The rest are the sweep's events, in order.
+    expect(lines[0]).toMatchObject({ t: "clock" });
+    expect(lines.slice(1)).toEqual(first.events);
 
-    // After a minute a new sweep starts.
-    vi.setSystemTime(Date.now() + 61_000);
+    // After half a minute a new sweep starts.
+    vi.setSystemTime(Date.now() + 31_000);
     expect(getNationalSweep()).not.toBe(first);
   });
 

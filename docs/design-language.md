@@ -2,7 +2,7 @@
 
 Advisory only. Not certified. Does not replace ATC, ATIS, TCAS or pilot judgment. Not for navigation.
 
-Decided November 15, 2026. Adam picked two directions, "Glass deck" and "Scope", and they were merged into one language.
+Decided November 15, 2026. Adam picked two directions, "Glass deck" and "Scope", and they were merged into one language. Later the same day he asked for the colors to follow the small airplane emoji, so the palette below is sampled from it. The shapes and rules did not change.
 
 ## The project in three lines
 
@@ -39,12 +39,13 @@ Three real things from the subject's own world:
 
 Each one can be checked on a screenshot.
 
-1. **The map background is black, and the base map is a faint backdrop.** Traffic is always the brightest thing on screen.
-2. **Every state has its own shape and its own color.** Hollow diamond is unflagged traffic. Filled circle is an aircraft in a flagged pair. Filled square is the selected pair. No state is told apart by color alone.
+1. **The map background is near-black plum, and the base map is a faint backdrop.** Traffic is always the brightest thing on screen.
+2. **Every state has its own shape and its own color.** Hollow lavender diamond is unflagged traffic. Filled coral circle is an aircraft in a flagged pair. Filled blue square is the selected pair. No state is told apart by color alone.
 3. **Text on the map has no box.** A data block is a leader line and lettering with a dark edge.
 4. **One type family, mono, for the whole instrument.** The only exception is long prose in the story panel.
 5. **Square corners and hairline rules.** No rounded cards, no shadows on the instrument itself.
-6. **Amber and red are never decoration.** Amber means "flagged by the demo check". Red means "the pair you selected" or "something failed". The disclaimer bar is the one fixed amber surface.
+6. **Coral and blue are never decoration.** Coral means "flagged by the demo check" or "something failed". Blue means "you can press this" or "you selected this". The disclaimer bar is the one fixed coral surface.
+7. **Every color comes from the emoji.** Coral wings, lavender-white body, blue cockpit, plum propeller. Nothing else is added.
 
 ## Tokens
 
@@ -52,9 +53,11 @@ Defined in `app/globals.css`.
 
 | Layer | May it vary? | Tokens |
 | --- | --- | --- |
-| Neutrals | No | `bg` #000000, `panel` #05080b, `raised` #0d1318, `line` #1c252e, `fg` #dfe6ec, `muted` #8f9ba6 |
-| Semantic | No | `accent` #35d0e0 (traffic, links, focus), `warn` #ffb000 (flagged), `danger` #ff4d3d (selected pair, failures), `track` #ff4fd8 (selected aircraft's track) |
+| Neutrals | No | `bg` #0e0b14, `panel` #16121f, `raised` #211a2c, `line` #342b42 (plum, from the propeller), `fg` #f0e8f6, `muted` #b4a8c0 (lavender, from the body) |
+| Semantic | No | `traffic` #dcd4ea (unflagged aircraft), `accent` #40d0f0 (cockpit blue: links, focus, selection), `warn` #f45d7f (coral: flagged), `danger` #e3445e (deeper coral: failures) |
 | Theme | Not used | There is one theme. A light theme would be a new decision. |
+
+The emoji looks different on each platform. These values were sampled on November 15, 2026 from Windows, where it has coral wings (#f45d7f, #e3445e, #a23958), a lavender-white body (#f0e8f6, #d2ccdc, #b4a3b8), a blue cockpit (#40d0f0), and a plum propeller (#403050).
 
 ## Type
 

@@ -40,8 +40,11 @@ const SWEEP_ORDER: ReadonlyArray<number> = [
 
 /** adsb.fi allows 1 request per second. Stay a little under it. */
 const REQUEST_SPACING_MS = 1_100;
-/** A finished sweep is reused for this long before another one starts. */
-const SWEEP_TTL_MS = 60_000;
+/**
+ * A finished sweep is reused for this long before another one starts. Kept
+ * short so that positions are never much older than the page can project.
+ */
+const SWEEP_TTL_MS = 30_000;
 /** A failed sweep is retried sooner than a good one is refreshed. */
 const FAILED_TTL_MS = 15_000;
 /** Give up on a sweep that runs longer than this. */
@@ -238,6 +241,8 @@ export function nationalStream(sweep: Sweep = getNationalSweep()): ReadableStrea
   let unsubscribe = () => {};
   return new ReadableStream<Uint8Array>({
     start(controller) {
+      const clock: SweepEvent = { t: "clock", nowUnix: Date.now() / 1000 };
+      controller.enqueue(encoder.encode(`${JSON.stringify(clock)}\n`));
       unsubscribe = sweep.subscribe((event) => {
         try {
           controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));

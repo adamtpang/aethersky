@@ -2,18 +2,23 @@
 
 @theme {
   /* Scope glass. See docs/design-language.md. */
-  /* Neutrals: never change. */
-  --color-bg: #000000;
-  --color-panel: #05080b;
-  --color-raised: #0d1318;
-  --color-line: #1c252e;
-  --color-fg: #dfe6ec;
-  --color-muted: #8f9ba6;
+  /*
+   * Every color comes from the small airplane emoji as Windows draws it:
+   * coral wings, a lavender-white body, a blue cockpit, a plum propeller.
+   */
+  /* Neutrals: never change. Plum darks, lavender lights. */
+  --color-bg: #0e0b14;
+  --color-panel: #16121f;
+  --color-raised: #211a2c;
+  --color-line: #342b42;
+  --color-fg: #f0e8f6;
+  --color-muted: #b4a8c0;
   /* Semantic: never change. Each also has its own shape on the map. */
-  --color-accent: #35d0e0; /* traffic, links, focus */
-  --color-warn: #ffb000; /* flagged by the demo check */
-  --color-danger: #ff4d3d; /* selected pair, failures */
-  --color-track: #ff4fd8; /* selected aircraft's track */
+  --color-traffic: #dcd4ea; /* body: aircraft that are not flagged */
+  --color-accent: #40d0f0; /* cockpit: anything you can press or have selected */
+  --color-warn: #f45d7f; /* wings: flagged by the demo check */
+  --color-danger: #e3445e; /* wings, deeper: failures */
+  --color-track: #40d0f0; /* selected aircraft's track */
 
   /* One family carries everything. Figures line up like a scope readout. */
   --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas,
@@ -66,7 +71,7 @@ input[type="range"] {
 }
 
 .leaflet-control-attribution {
-  background: rgba(0, 0, 0, 0.85) !important;
+  background: rgba(14, 11, 20, 0.85) !important;
   color: var(--color-muted) !important;
 }
 
