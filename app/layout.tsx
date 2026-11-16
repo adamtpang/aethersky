@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import DisclaimerBar from "@/components/DisclaimerBar";
+import NavBar from "@/components/NavBar";
 import { DISCLAIMER_TEXT } from "@/lib/disclaimer";
 import "./globals.css";
 
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex h-dvh flex-col overflow-hidden">
         {/* Always visible on every page. There is no dismiss control. */}
         <DisclaimerBar />
+        <NavBar />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </body>
     </html>

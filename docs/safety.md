@@ -46,7 +46,7 @@ When no live feed answers, the UI must say LIVE DATA UNAVAILABLE in a way that c
 
 On the national map every position is an estimate: the last reported position moved forward along its track to the current moment. The UI must say so near the data source. A report older than 120 seconds must be removed, not projected further.
 
-The "What is this?" panel must keep saying plainly that this page would not have prevented the November 13, 2026 ground stop, and must never cover the disclaimer bar.
+The About page (`/about`, linked from the nav bar on every page) must keep saying plainly that this site would not have prevented the November 13, 2026 ground stop. Nothing may open over the map by itself on arrival, and nothing may ever cover the disclaimer bar.
 
 Scripted aircraft exist only in the test suite (`lib/conflict/scene.fixture.ts`) to exercise the engine.
 

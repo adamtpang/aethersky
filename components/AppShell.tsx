@@ -21,7 +21,6 @@ import {
 import MapLegend from "./MapLegend";
 import type { MapFocus } from "./MapView";
 import Sidebar from "./Sidebar";
-import StoryPanel from "./StoryPanel";
 
 // Leaflet needs the browser, so the map is loaded on the client only.
 const MapView = dynamic(() => import("./MapView"), {
@@ -72,7 +71,6 @@ export default function AppShell() {
   });
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
-  const [storyOpen, setStoryOpen] = useState(false);
   const [conflictsOnly, setConflictsOnly] = useState(false);
 
   // Real traffic only. When the feed fails, the map shows no aircraft and
@@ -289,7 +287,6 @@ export default function AppShell() {
           selectedPairKey={selectedPairKey}
           onSelectAircraft={handleSelectFromList}
           onSelectPair={handleSelectPair}
-          onOpenStory={() => setStoryOpen(true)}
           filters={filters}
           thresholds={thresholds}
           conflictsOnly={conflictsOnly}
@@ -299,7 +296,6 @@ export default function AppShell() {
           onFiltersChange={setFilters}
           onThresholdsChange={setThresholds}
         />
-        <StoryPanel open={storyOpen} onOpenChange={setStoryOpen} />
       </main>
     </>
   );

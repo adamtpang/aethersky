@@ -14,9 +14,9 @@ Decided November 15, 2026. Adam picked two directions, "Glass deck" and "Scope",
 
 | Kind | Count | What |
 | --- | --- | --- |
-| Interactive widgets | 4 kinds | sliders, text and number inputs, list buttons, one dialog |
+| Interactive widgets | 4 kinds | sliders, text and number inputs, list buttons, a nav bar |
 | Data graphics | 1 | the map, which is most of the screen |
-| Reading content | 1 | the "What is this?" panel |
+| Reading content | 1 | the About page |
 | Marketing | 0 | none |
 
 Shape: **data graphic**. The map is the product. Everything else serves it.

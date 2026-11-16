@@ -10,7 +10,7 @@ aethersky is a free, non-certified public demo: a web map that shows public ADS-
 
 ![A close view with one aircraft selected: its details, its track ahead, and data blocks on the others](docs/screenshots/data-blocks.jpg)
 
-It would not have prevented the November 13, 2026 ground stop, and it says so on the page. It is a picture of one idea, drawn in the open so people can argue with it and improve it. The background is in [Why this exists](#why-this-exists).
+It would not have prevented the November 13, 2026 ground stop, and it says so on its [About page](https://aethersky.vercel.app/about). It is a picture of one idea, drawn in the open so people can argue with it and improve it. The background is in [Why this exists](#why-this-exists).
 
 ## Hack on it
 
@@ -23,7 +23,8 @@ Fork it. The pieces are small and separate on purpose.
 | Where traffic comes from | `lib/nationalFeed.ts`, `lib/readsb.ts` | A sweep of 30 circles from adsb.fi, streamed as JSON lines. Swap in your own receiver here. |
 | How the map is drawn | `components/TrafficCanvas.tsx` | One canvas. No DOM markers. |
 | The look | `docs/design-language.md`, `app/globals.css` | "Scope glass": the rules and the tokens. |
-| The story panel | `components/StoryPanel.tsx` | Keep it honest. |
+| The About page | `app/about/page.tsx`, `components/StoryContent.tsx` | The story of what this is and is not. Keep it honest. |
+| The nav bar | `components/NavBar.tsx` | On every page, under the disclaimer. |
 
 Good first projects:
 
