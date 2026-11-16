@@ -9,6 +9,7 @@ import {
   fmtTcpa,
   fmtVerticalRate,
 } from "@/lib/format";
+import type { Resolution } from "@/lib/conflict";
 import type { Aircraft, ConflictPair } from "@/lib/types";
 
 interface AircraftCardProps {
@@ -17,6 +18,8 @@ interface AircraftCardProps {
   pairs: ConflictPair[];
   nameOf: (icao24: string) => string;
   checkFloorFt: number;
+  /** One small change that would clear a pair, or null if none on the list does. */
+  resolutionFor: (pair: ConflictPair) => Resolution | null;
   onShowPair: (pair: ConflictPair) => void;
   onClose: () => void;
 }
@@ -29,6 +32,25 @@ export function describePair(pair: ConflictPair): string {
     return `They are inside the demo limits right now: ${distance} and ${vertical} apart.`;
   }
   return `If both keep flying straight, in ${fmtTcpa(pair.tcpaSec)} they pass ${distance} and ${vertical} apart.`;
+}
+
+/** One plain sentence about a change that would clear a pair. */
+export function describeResolution(
+  resolution: Resolution | null,
+  nameOf: (icao24: string) => string,
+): string {
+  if (!resolution) {
+    return "No small change on the demo list clears this in the time left. Real systems look further ahead so they can act earlier.";
+  }
+  const who =
+    resolution.partnerId && resolution.partnerLabel
+      ? `${nameOf(resolution.aircraftId)} ${resolution.label} while ${nameOf(resolution.partnerId)} ${resolution.partnerLabel}`
+      : `${nameOf(resolution.aircraftId)} ${resolution.label}`;
+  const result =
+    resolution.clearsInSec !== undefined
+      ? `They would be outside the demo limits in about ${resolution.clearsInSec} s.`
+      : `They would then pass ${fmtNm(resolution.afterHorizontalNm)} and ${fmtFeet(resolution.afterVerticalFt)} apart.`;
+  return `One way out: ${who}. ${result}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -49,6 +71,7 @@ export default function AircraftCard({
   pairs,
   nameOf,
   checkFloorFt,
+  resolutionFor,
   onShowPair,
   onClose,
 }: AircraftCardProps) {
@@ -115,14 +138,17 @@ export default function AircraftCard({
                       With {nameOf(other)}
                     </button>
                     <p className="text-muted">{describePair(pair)}</p>
+                    <p className="mt-0.5 border-l-2 border-accent pl-2 text-fg">
+                      {describeResolution(resolutionFor(pair), nameOf)}
+                    </p>
                   </li>
                 );
               })}
             </ul>
             <p className="mt-2 text-muted">
-              A real system would have one aircraft climb and the other
-              descend, or turn, well before this point. This page only
-              watches. It gives no instructions.
+              Illustration only, not an instruction. It knows nothing about
+              terrain, weather, airspace, or what a controller has already
+              said. No pilot sees this page.
             </p>
           </>
         ) : belowFloor ? (

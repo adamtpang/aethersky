@@ -31,3 +31,4 @@ export {
   type DetectOptions,
 } from "./detect";
 export { FAST_AIRCRAFT_KT, detectConflictsRegional, reachNm } from "./regional";
+export { MANEUVERS, suggestResolution, type Maneuver, type ManeuverKind, type Resolution } from "./resolve";

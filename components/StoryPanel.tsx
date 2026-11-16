@@ -174,8 +174,8 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
               </strong>{" "}
               It is a website. It needs the internet, a server, and ground
               receivers, so it is more fragile than the system that failed,
-              not less. It only watches. No pilot sees it, and it cannot tell
-              anyone what to do.
+              not less. It only watches. No pilot sees it, and the changes
+              it suggests are an illustration that nobody receives.
             </p>
             <p>
               Certified equipment on aircraft already warns pilots about
@@ -187,9 +187,10 @@ export default function StoryPanel({ open, onOpenChange }: StoryPanelProps) {
           <Step n={6} title="What you can do here">
             <p>
               Look at the live picture, switch to &quot;Conflicts only&quot;,
-              and click a flagged pair to see what the check predicts. Move
-              the sliders and watch how much the answer depends on the
-              numbers. If you build things, fork the code and make the check
+              and click a flagged aircraft to see what the check predicts
+              and one small change that would clear it. Move the sliders and
+              watch how much the answer depends on the numbers. Stretch the
+              lookahead and notice that more warning means smaller changes. If you build things, fork the code and make the check
               better.
             </p>
           </Step>
