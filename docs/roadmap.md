@@ -42,6 +42,10 @@ Open items from the MVP pull request (adamtpang/aethersky#1), saved on November 
 - [x] Fixed: aircraft could vanish after zooming or after the tab sat in the background. The page was judging cached positions against the wrong clock and discarding all of them. It now reads the server clock from the stream, refreshes as soon as a tab returns, and asks again at once if everything has expired.
 - [x] "Conflicts only" view, a plain definition of a conflict, and an info card when an aircraft is clicked.
 - [x] Colors now follow the small airplane emoji.
+- [x] The story moved from a popup that opened on arrival to an About page in the nav bar (Adam, November 15, 2026).
+- [x] Conflict resolution illustration: clicking a flagged aircraft shows one small change that would clear the pair.
+- [ ] Detection blind spot: vertical separation is checked only at the moment of closest horizontal approach. Scan the whole window, as the resolution check already does.
+- [ ] On cached data the page clock runs about 18 seconds behind, so aircraft are drawn slightly behind.
 - [ ] Look at the site on a real phone. Layout was measured at 375 px wide, not seen on a device.
 
 ## Later, only after the MVP is honest and reviewed

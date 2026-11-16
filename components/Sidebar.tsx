@@ -20,12 +20,10 @@ import type {
 } from "@/lib/types";
 import Filters, { type DisplayFilters } from "./Filters";
 import type { LiveTraffic } from "@/lib/useLiveTraffic";
-import Logo from "./Logo";
 import MapLegend from "./MapLegend";
 
 interface SidebarProps {
   traffic: LiveTraffic;
-  onOpenStory: () => void;
   conflicts: ConflictPair[];
   byId: ReadonlyMap<string, Aircraft>;
   conflictIds: ReadonlySet<string>;
@@ -97,7 +95,6 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 export default function Sidebar({
   traffic,
-  onOpenStory,
   conflicts,
   byId,
   conflictIds,
@@ -135,28 +132,6 @@ export default function Sidebar({
       aria-label="Traffic details and controls"
       className="flex min-h-0 flex-col overflow-y-auto border-line bg-panel text-[13px] lg:border-l"
     >
-      <header className="flex items-center gap-2.5 border-b border-line px-4 py-3">
-        <Logo size={30} />
-        <div className="min-w-0 leading-tight">
-          <p className="text-[15px] font-semibold tracking-tight">aethersky</p>
-          <p className="truncate text-[11px] text-muted">Advisory demo</p>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenStory}
-          className="ml-auto shrink-0 whitespace-nowrap border border-accent/60 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent/20"
-        >
-          What is this?
-        </button>
-        <a
-          href="https://github.com/adamtpang/aethersky"
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 border border-line px-2 py-1 text-[11px] text-muted hover:border-accent hover:text-accent"
-        >
-          GitHub
-        </a>
-      </header>
       <MapLegend inline />
 
       <Section
