@@ -239,6 +239,65 @@ describe("projection and wire format", () => {
   });
 });
 
+describe("a sweep frozen mid-flight", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW_MS);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("is shared while it is still making progress", async () => {
+    stubFeed(() => ok([]));
+    const { getNationalSweep } = await load();
+    const sweep = getNationalSweep();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sweep.stalled).toBe(false);
+    expect(getNationalSweep()).toBe(sweep);
+    await vi.runAllTimersAsync();
+  });
+
+  it("is dropped and replaced, tells its readers, and asks the feed nothing more", async () => {
+    // The third request never comes back, as when the host freezes the process.
+    const never = new Promise<Response>(() => {});
+    let call = 0;
+    const fetchMock = vi.fn(async (input: URL | string) => {
+      void input;
+      return call++ === 2 ? never : ok([]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getNationalSweep, NATIONAL_TILES } = await load();
+
+    const frozen = getNationalSweep();
+    const seen: SweepEvent[] = [];
+    frozen.subscribe((event) => seen.push(event));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(regions(frozen.events)).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Minutes later the process wakes for the next visitor.
+    vi.setSystemTime(NOW_MS + 5 * 60_000);
+    expect(frozen.stalled).toBe(true);
+    const fresh = getNationalSweep();
+    expect(fresh).not.toBe(frozen);
+    expect(end(seen).error).toMatch(/interrupted/);
+    expect(frozen.failed).toBe(true);
+
+    await vi.runAllTimersAsync();
+    await fresh.done;
+    expect(end(fresh.events).regionsOk).toBe(NATIONAL_TILES.length);
+    expect(end(fresh.events).error).toBeUndefined();
+    // Three from the frozen sweep, then one per region from the new one.
+    expect(fetchMock).toHaveBeenCalledTimes(3 + NATIONAL_TILES.length);
+    expect(regions(frozen.events)).toHaveLength(2);
+  });
+});
+
 describe("snapshot of the last sweep", () => {
   beforeEach(() => {
     vi.useFakeTimers();

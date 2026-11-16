@@ -24,14 +24,17 @@ export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("snapshot") === "1") {
-    // Join the sweep in progress, or a recent one, or start one. Never a
-    // second sweep alongside the first.
-    const held = lastSnapshot();
-    const sweep = getNationalSweep();
-    // If this server already holds a finished sweep, answer with it now and
-    // let the new one carry on in the background. Otherwise wait for one.
-    if (!held) await sweep.done;
-    const snapshot = held ?? snapshotOf(sweep);
+    // If this server already holds a finished sweep, answer with it and do
+    // nothing else. It must not start a sweep here: once this response is
+    // sent the host may freeze the process, and a sweep left running in the
+    // background would be caught half done. Sweeps are run by the live
+    // stream, whose open response keeps the process alive until the end.
+    let snapshot = lastSnapshot();
+    if (!snapshot) {
+      const sweep = getNationalSweep();
+      await sweep.done;
+      snapshot = snapshotOf(sweep);
+    }
     if (!snapshot) {
       return Response.json(
         { error: "No finished sweep is available." },

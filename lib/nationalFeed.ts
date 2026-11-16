@@ -55,6 +55,14 @@ const SWEEP_TTL_MS = 30_000;
 const FAILED_TTL_MS = 15_000;
 /** Give up on a sweep that runs longer than this. */
 const SWEEP_BUDGET_MS = 75_000;
+/**
+ * A sweep that has published nothing for this long is treated as dead. A
+ * serverless host can freeze the process the moment the last response is
+ * sent. A sweep caught mid-flight then wakes up minutes later, far over its
+ * time budget, and would fail the next visitor. The longest honest gap
+ * between two regions is one request timeout plus a rate-limit pause.
+ */
+const STALL_MS = 20_000;
 /** Below this share of regions the picture is too patchy to show. */
 const MIN_REGION_SHARE = 0.6;
 
@@ -109,6 +117,9 @@ export class Sweep {
   readonly startedAtMs = Date.now();
   finishedAtMs: number | null = null;
   failed = false;
+  /** When this sweep last published anything. */
+  lastProgressMs = Date.now();
+  private abandoned = false;
   private listeners = new Set<(event: SweepEvent) => void>();
   readonly done: Promise<void>;
 
@@ -133,7 +144,31 @@ export class Sweep {
     return () => this.listeners.delete(listener);
   }
 
+  /** True if the sweep is still running but has gone quiet for too long. */
+  get stalled(): boolean {
+    return this.finishedAtMs === null && Date.now() - this.lastProgressMs > STALL_MS;
+  }
+
+  /**
+   * Give up on this sweep. Anyone still reading it is told it failed, and
+   * its loop stops asking the feed, so it cannot run alongside a new sweep.
+   */
+  abandon() {
+    if (this.finishedAtMs !== null) return;
+    this.abandoned = true;
+    this.publish({
+      t: "end",
+      finishedAtUnix: Math.floor(Date.now() / 1000),
+      sweepSec: Math.round((Date.now() - this.startedAtMs) / 1000),
+      regionsOk: 0,
+      regionsTotal: NATIONAL_TILES.length,
+      error: "The sweep was interrupted. A new one has started.",
+    });
+  }
+
   private publish(event: SweepEvent) {
+    if (this.finishedAtMs !== null) return;
+    this.lastProgressMs = Date.now();
     this.events.push(event);
     if (event.t === "end") {
       this.finishedAtMs = Date.now();
@@ -160,6 +195,7 @@ export class Sweep {
     let lastReason = "";
 
     for (let step = 0; step < SWEEP_ORDER.length; step++) {
+      if (this.abandoned) return;
       if (Date.now() - this.startedAtMs > SWEEP_BUDGET_MS) {
         lastReason = "the sweep ran out of time";
         break;
@@ -168,7 +204,9 @@ export class Sweep {
       const [lat, lon] = NATIONAL_TILES[SWEEP_ORDER[step]];
       try {
         const rows: WireRow[] = [];
-        for (const sighting of await fetchTile(lat, lon)) {
+        const sightings = await fetchTile(lat, lon);
+        if (this.abandoned) return;
+        for (const sighting of sightings) {
           const id = sighting.row[0];
           const known = sent.get(id);
           if (known === undefined || sighting.positionUnix > known + 0.5) {
@@ -180,6 +218,7 @@ export class Sweep {
         consecutiveFailures = 0;
         this.publish({ t: "region", done: ++done, ok: true, rows });
       } catch (error) {
+        if (this.abandoned) return;
         consecutiveFailures++;
         lastReason =
           error instanceof FeedError
@@ -204,6 +243,7 @@ export class Sweep {
       }
     }
 
+    if (this.abandoned) return;
     const tooFew = regionsOk < regionsTotal * MIN_REGION_SHARE;
     this.publish({
       t: "end",
@@ -235,9 +275,15 @@ let lastGood: TrafficSnapshot | null = null;
  */
 export function getNationalSweep(): Sweep {
   if (current) {
-    if (current.finishedAtMs === null) return current;
-    const ttl = current.failed ? FAILED_TTL_MS : SWEEP_TTL_MS;
-    if (Date.now() - current.finishedAtMs < ttl) return current;
+    // A sweep frozen mid-flight is dropped, not resumed.
+    if (current.stalled) {
+      current.abandon();
+    } else if (current.finishedAtMs === null) {
+      return current;
+    } else {
+      const ttl = current.failed ? FAILED_TTL_MS : SWEEP_TTL_MS;
+      if (Date.now() - current.finishedAtMs < ttl) return current;
+    }
   }
   const sweep = new Sweep();
   current = sweep;
