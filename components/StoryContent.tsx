@@ -146,6 +146,23 @@ export default function StoryContent() {
           .
         </p>
       </Step>
+      <Step n={8} title="Related work">
+        <p>
+          Casey Handmer, whose post started this project, built{" "}
+          <a
+            className="text-accent hover:underline"
+            href="https://faa.caseyhandmer.com/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            US airspace on a toothbrush CPU
+          </a>
+          . It detects and resolves conflicts for a simulated day of US
+          traffic on the chip from a Wi-Fi toothbrush, to show how little
+          computing the job needs. This site is the other half: real, live
+          traffic, and open code.
+        </p>
+      </Step>
     </div>
   );
 }

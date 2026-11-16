@@ -231,3 +231,95 @@ describe("conflict rules beyond the fixtures", () => {
     expect(withGrid).toEqual(withoutGrid);
   });
 });
+
+describe("the whole window is checked, not one moment", () => {
+  it("flags an aircraft descending through the level of one flying beside it", () => {
+    // Side by side, 2 NM apart, same speed and direction. B is 1,500 ft above
+    // and descending at 1,500 fpm, so it passes through A's level. At the
+    // moment of closest horizontal approach (now) they are 1,500 ft apart,
+    // which is why the first version of the check missed this.
+    const result = detect([
+      ac({ id: "a", east: 0, north: 0, altitudeFt: 10000 }),
+      ac({ id: "b", east: 0, north: 2 * 1852, altitudeFt: 11500, verticalRateFpm: -1500 }),
+    ]);
+    expect(result).toHaveLength(1);
+    // They come within 1,000 ft from 20 s to 100 s.
+    expect(result[0].tcpaSec).toBeGreaterThan(20);
+    expect(result[0].tcpaSec).toBeLessThan(21);
+    expect(result[0].verticalAtTcpaFt).toBeLessThan(1000);
+    expect(result[0].dcpaNm).toBeCloseTo(2, 2);
+    expect(result[0].currentVerticalFt).toBeCloseTo(1500, 6);
+  });
+
+  it("flags a head-on pair that is level with each other before they pass", () => {
+    // 20 NM apart head-on, so they pass in 120 s. B starts 4,500 ft above and
+    // descends at 3,000 fpm. When they pass, B is 1,500 ft below: clear. But
+    // from 90 s to 110 s they are within 5 NM and within 1,000 ft together.
+    const result = detect([
+      ac({ id: "a", east: -2 * FIVE_NM_M, north: 0, headingDeg: 90, altitudeFt: 10000 }),
+      ac({
+        id: "b",
+        east: 2 * FIVE_NM_M,
+        north: 0,
+        headingDeg: 270,
+        altitudeFt: 14500,
+        verticalRateFpm: -3000,
+      }),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].tcpaSec).toBeGreaterThan(90);
+    expect(result[0].tcpaSec).toBeLessThanOrEqual(110);
+    expect(result[0].dcpaNm).toBeLessThan(5);
+    expect(result[0].verticalAtTcpaFt).toBeLessThan(1000);
+  });
+
+  it("does not flag when the two limits are broken at different times", () => {
+    // Same head-on pair, but B descends through A's level early, at 40 to
+    // 80 s, while they are still more than 5 NM apart. By the time they are
+    // close on the ground (90 s on), B is well below.
+    const result = detect([
+      ac({ id: "a", east: -2 * FIVE_NM_M, north: 0, headingDeg: 90, altitudeFt: 10000 }),
+      ac({
+        id: "b",
+        east: 2 * FIVE_NM_M,
+        north: 0,
+        headingDeg: 270,
+        altitudeFt: 13000,
+        verticalRateFpm: -3000,
+      }),
+    ]);
+    expect(result).toHaveLength(0);
+  });
+
+  it("always reports a time inside the window and numbers under the limits", () => {
+    let seed = 4242;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const field: Aircraft[] = [];
+    for (let i = 0; i < 200; i++) {
+      field.push(
+        ac({
+          id: `w${String(i).padStart(3, "0")}`,
+          east: (rand() - 0.5) * 200_000,
+          north: (rand() - 0.5) * 200_000,
+          altitudeFt: 5000 + Math.floor(rand() * 10) * 500,
+          headingDeg: rand() * 360,
+          groundSpeedKt: 120 + rand() * 400,
+          verticalRateFpm: Math.round((rand() - 0.5) * 6000),
+        }),
+      );
+    }
+    const result = detect(field);
+    expect(result.length).toBeGreaterThan(10);
+    for (const pair of result) {
+      expect(pair.tcpaSec).toBeGreaterThanOrEqual(0);
+      expect(pair.tcpaSec).toBeLessThanOrEqual(T.lookaheadSec);
+      expect(pair.dcpaNm).toBeLessThan(T.lateralNm);
+      expect(pair.verticalAtTcpaFt).toBeLessThan(T.verticalFt);
+    }
+    // And the grid still agrees with the naive loop.
+    expect(result).toEqual(detect(field, false));
+  });
+});

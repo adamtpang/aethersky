@@ -64,7 +64,7 @@ Two aircraft, both above the check floor, that would pass within 5 NM sideways a
 
 ## How the check works
 
-Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. Across a whole country one plane would be badly stretched, so the traffic is sorted into a grid, two cheap tests throw out pairs that cannot possibly close in time, and each remaining pair is measured on its own small plane centered between the two aircraft. The check runs in a background worker. On a laptop it covers about 5,600 aircraft in 10 to 20 milliseconds, and the sidebar shows the live figure. For every pair, the app finds the time and horizontal distance of closest approach inside the lookahead window, and the vertical separation at that time. A pair is flagged when both are under the thresholds.
+Each airborne aircraft with a position, heading, ground speed, and altitude is projected onto a flat local plane and assumed to keep its current velocity. Across a whole country one plane would be badly stretched, so the traffic is sorted into a grid, two cheap tests throw out pairs that cannot possibly close in time, and each remaining pair is measured on its own small plane centered between the two aircraft. The check runs in a background worker. On a laptop it covers about 5,600 aircraft in 10 to 20 milliseconds, and the sidebar shows the live figure. A pair is flagged when, at some moment inside the lookahead window, the two are under the lateral threshold on the ground and under the vertical threshold in altitude at the same time. The whole window is checked, so an aircraft climbing through another's level is caught even if they are well apart at the moment they pass.
 
 The shipped thresholds are 5 NM lateral, 1000 ft vertical, and 120 s lookahead. They are demo defaults, not regulatory minimums, and the sliders say so. Aircraft below 10,000 ft are drawn but left out of the check by default, because traffic near airports is close together on purpose and a straight-line check would flag hundreds of those pairs. That floor is also a demo default, and it can be set to 0. Aircraft on the ground are never paired. The engine lives in `lib/conflict` as plain TypeScript with no framework code, so it is easy to read, test, and replace.
 
@@ -139,6 +139,10 @@ The name "Schafer" is written here without a diacritic only to keep this file in
 - [docs/roadmap.md](docs/roadmap.md): first build, then later ideas
 - [docs/design-language.md](docs/design-language.md): the "Scope glass" look, its rules and tokens
 - [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md)
+
+## Related work
+
+- [US airspace on a toothbrush CPU](https://faa.caseyhandmer.com/) by Casey Handmer, whose post started this project. It runs conflict detection and resolution for a simulated day of US traffic (about 5,000 aircraft at the peak) on an emulated ESP32-C3, the chip in a Wi-Fi toothbrush, to show how little computing the job needs. Its traffic is simulated and its aircraft obey the solver. aethersky is the other half: real, live traffic, with detection and an illustrated way out, and open code. [GAP-ANALYSIS.md](GAP-ANALYSIS.md) compares the two.
 
 ## Credits
 
