@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import {
   getNationalSweep,
-  lastSnapshot,
   nationalStream,
   snapshotOf,
 } from "@/lib/nationalFeed";
@@ -24,17 +23,16 @@ export const maxDuration = 120;
 
 export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("snapshot") === "1") {
-    // If this server already holds a finished sweep, answer with it and do
-    // nothing else. It must not start a sweep here: once this response is
-    // sent the host may freeze the process, and a sweep left running in the
-    // background would be caught half done. Sweeps are run by the live
-    // stream, whose open response keeps the process alive until the end.
-    let snapshot = lastSnapshot();
-    if (!snapshot) {
-      const sweep = getNationalSweep();
-      await sweep.done;
-      snapshot = snapshotOf(sweep);
-    }
+    // Always answer with the sweep that is current right now: the one in
+    // progress, a recent finished one, or a new one. Waiting for it keeps
+    // this response open, so the host cannot freeze the process half way
+    // through. The CDN hands visitors its older copy at once and uses this
+    // answer to replace it, so the wait is not something a visitor sees.
+    // Answering from memory instead left the CDN one visit behind, and the
+    // page then hid the picture as too old.
+    const sweep = getNationalSweep();
+    await sweep.done;
+    const snapshot = snapshotOf(sweep);
     if (!snapshot) {
       return Response.json(
         { error: "No finished sweep is available." },
